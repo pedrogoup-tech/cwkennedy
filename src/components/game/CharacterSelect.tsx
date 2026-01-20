@@ -16,6 +16,8 @@ const CharacterSelect: React.FC<CharacterSelectProps> = ({
   onConfirm,
   onBack,
 }) => {
+  const selectedChar = characters.find(c => c.id === selectedCharacter);
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden"
       style={{ background: 'var(--gradient-night)' }}
@@ -38,13 +40,13 @@ const CharacterSelect: React.FC<CharacterSelectProps> = ({
       {/* Back button */}
       <button 
         onClick={onBack}
-        className="absolute top-6 left-6 p-3 rounded-xl bg-white/10 hover:bg-white/20 transition-colors text-white"
+        className="absolute top-6 left-6 p-3 rounded-xl bg-white/10 hover:bg-white/20 transition-colors text-white z-20"
       >
         <ArrowLeft className="w-6 h-6" />
       </button>
 
       {/* Title */}
-      <div className="relative z-10 text-center mb-8 animate-slide-up">
+      <div className="relative z-10 text-center mb-6 animate-slide-up">
         <h1 className="font-pixel text-2xl md:text-3xl text-white mb-2">
           ESCOLHA SEU
         </h1>
@@ -54,26 +56,27 @@ const CharacterSelect: React.FC<CharacterSelectProps> = ({
       </div>
 
       {/* Character grid */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-6 max-w-5xl mx-auto relative z-10 animate-slide-up"
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 max-w-5xl mx-auto relative z-10 animate-slide-up"
         style={{ animationDelay: '0.2s' }}
       >
         {characters.map((character) => (
           <div
             key={character.id}
             onClick={() => onSelectCharacter(character.id)}
-            className={`character-card ${selectedCharacter === character.id ? 'selected' : ''}`}
-            style={{
-              '--character-color': character.color,
-            } as React.CSSProperties}
+            className={`character-card ${selectedCharacter === character.id ? 'selected' : ''} relative`}
           >
-            {/* Character avatar */}
+            {/* Character sprite */}
             <div 
-              className="w-full aspect-square rounded-xl mb-3 flex items-center justify-center text-5xl relative overflow-hidden"
+              className="w-full aspect-square rounded-xl mb-2 flex items-center justify-center relative overflow-hidden"
               style={{ 
                 background: `linear-gradient(135deg, ${character.color}, ${character.color}88)`,
               }}
             >
-              {character.emoji}
+              <img 
+                src={character.sprite} 
+                alt={character.name}
+                className="w-full h-full object-contain p-2"
+              />
               
               {/* Selected indicator */}
               {selectedCharacter === character.id && (
@@ -84,25 +87,50 @@ const CharacterSelect: React.FC<CharacterSelectProps> = ({
             </div>
 
             {/* Character info */}
-            <h3 className="font-game font-bold text-white text-center text-sm leading-tight mb-1">
+            <h3 className="font-game font-bold text-white text-center text-xs md:text-sm leading-tight mb-1">
               {character.name}
             </h3>
-            <p className="text-xs text-white/60 text-center line-clamp-2 hidden md:block">
-              {character.description}
-            </p>
+            
+            {/* Passive indicator */}
+            <div className="flex items-center justify-center gap-1 text-xs text-yellow-400">
+              <span>{character.passive.icon}</span>
+              <span className="hidden md:inline">{character.passive.name}</span>
+            </div>
           </div>
         ))}
       </div>
 
-      {/* Selected character details (mobile) */}
-      {selectedCharacter && (
-        <div className="md:hidden mt-6 text-center text-white/80 text-sm max-w-xs animate-fade-in">
-          {characters.find(c => c.id === selectedCharacter)?.description}
+      {/* Selected character details */}
+      {selectedChar && (
+        <div className="mt-6 bg-black/50 backdrop-blur-sm rounded-2xl p-4 max-w-md w-full mx-4 animate-fade-in z-10">
+          <div className="flex items-center gap-4">
+            <img 
+              src={selectedChar.sprite} 
+              alt={selectedChar.name}
+              className="w-20 h-20 object-contain rounded-xl p-1"
+              style={{ background: selectedChar.color }}
+            />
+            <div className="flex-1">
+              <h3 className="font-game font-bold text-white text-lg">{selectedChar.name}</h3>
+              <p className="text-sm text-white/70">{selectedChar.description}</p>
+            </div>
+          </div>
+          
+          {/* Passive ability box */}
+          <div className="mt-3 bg-yellow-500/20 border border-yellow-500/40 rounded-xl p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xl">{selectedChar.passive.icon}</span>
+              <span className="font-game font-bold text-yellow-400 text-sm">
+                PASSIVA: {selectedChar.passive.name}
+              </span>
+            </div>
+            <p className="text-xs text-yellow-200/80">{selectedChar.passive.description}</p>
+          </div>
         </div>
       )}
 
       {/* Confirm button */}
-      <div className="mt-8 relative z-10">
+      <div className="mt-6 relative z-10">
         <button
           onClick={onConfirm}
           disabled={!selectedCharacter}
