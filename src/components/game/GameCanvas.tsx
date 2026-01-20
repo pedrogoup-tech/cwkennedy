@@ -3,6 +3,12 @@ import { Level, Player, Enemy, PowerUp, Projectile, CharacterId } from '@/types/
 import { characters } from '@/data/characters';
 import GameHUD from './GameHUD';
 
+// Import sprites
+import slothSprite from '@/assets/sprites/sloth.png';
+import coffeeSprite from '@/assets/sprites/coffee.png';
+import wifiSprite from '@/assets/sprites/wifi.png';
+import networkingSprite from '@/assets/sprites/networking.png';
+
 interface GameCanvasProps {
   level: Level;
   characterId: CharacterId;
@@ -19,6 +25,24 @@ const COFFEE_JUMP_BOOST = -3;
 const COFFEE_DURATION = 300;
 const PROJECTILE_SPEED = 12;
 
+// Character-specific modifiers
+const getCharacterModifiers = (characterId: CharacterId) => {
+  switch (characterId) {
+    case 'entrepreneur':
+      return { canDoubleJump: true, gravityMod: 1, speedMod: 1, collectRadius: 1, startsWithWifi: false };
+    case 'designer':
+      return { canDoubleJump: false, gravityMod: 0.65, speedMod: 1, collectRadius: 1, startsWithWifi: false };
+    case 'programmer':
+      return { canDoubleJump: false, gravityMod: 1, speedMod: 1, collectRadius: 1, startsWithWifi: true };
+    case 'socialmedia':
+      return { canDoubleJump: false, gravityMod: 1, speedMod: 1, collectRadius: 2, startsWithWifi: false };
+    case 'gestor':
+      return { canDoubleJump: false, gravityMod: 1, speedMod: 1.25, collectRadius: 1, startsWithWifi: false };
+    default:
+      return { canDoubleJump: false, gravityMod: 1, speedMod: 1, collectRadius: 1, startsWithWifi: false };
+  }
+};
+
 const GameCanvas: React.FC<GameCanvasProps> = ({
   level,
   characterId,
@@ -31,21 +55,65 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
   const keysRef = useRef<Set<string>>(new Set());
   
   const character = characters.find(c => c.id === characterId)!;
+  const modifiers = getCharacterModifiers(characterId);
+
+  // Load images
+  const [images, setImages] = useState<{
+    character: HTMLImageElement | null;
+    sloth: HTMLImageElement | null;
+    coffee: HTMLImageElement | null;
+    wifi: HTMLImageElement | null;
+    networking: HTMLImageElement | null;
+  }>({
+    character: null,
+    sloth: null,
+    coffee: null,
+    wifi: null,
+    networking: null,
+  });
+
+  useEffect(() => {
+    const loadImage = (src: string): Promise<HTMLImageElement> => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.src = src;
+      });
+    };
+
+    Promise.all([
+      loadImage(character.sprite),
+      loadImage(slothSprite),
+      loadImage(coffeeSprite),
+      loadImage(wifiSprite),
+      loadImage(networkingSprite),
+    ]).then(([charImg, slothImg, coffeeImg, wifiImg, networkingImg]) => {
+      setImages({
+        character: charImg,
+        sloth: slothImg,
+        coffee: coffeeImg,
+        wifi: wifiImg,
+        networking: networkingImg,
+      });
+    });
+  }, [character.sprite]);
 
   const [player, setPlayer] = useState<Player>({
     x: 100,
     y: 400,
-    width: 40,
-    height: 56,
+    width: 48,
+    height: 64,
     velocityX: 0,
     velocityY: 0,
     isJumping: false,
     isGrounded: false,
     facingRight: true,
     hasCoffee: false,
-    hasWifi: false,
+    hasWifi: modifiers.startsWithWifi,
     coffeeTimer: 0,
     networkingCollected: 0,
+    canDoubleJump: modifiers.canDoubleJump,
+    hasDoubleJumped: false,
   });
 
   const [enemies, setEnemies] = useState<Enemy[]>(() => 
@@ -65,44 +133,76 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     setPlayer({
       x: 100,
       y: 400,
-      width: 40,
-      height: 56,
+      width: 48,
+      height: 64,
       velocityX: 0,
       velocityY: 0,
       isJumping: false,
       isGrounded: false,
       facingRight: true,
       hasCoffee: false,
-      hasWifi: false,
+      hasWifi: modifiers.startsWithWifi,
       coffeeTimer: 0,
       networkingCollected: 0,
+      canDoubleJump: modifiers.canDoubleJump,
+      hasDoubleJumped: false,
     });
     setEnemies(level.enemies.map(e => ({ ...e, alive: true })));
     setPowerUps(level.powerUps.map(p => ({ ...p, collected: false })));
     setProjectiles([]);
     setCameraX(0);
     setGameTime(0);
-  }, [level]);
+  }, [level, modifiers.startsWithWifi, modifiers.canDoubleJump]);
 
   // Input handling
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (keysRef.current.has(e.code)) return;
       keysRef.current.add(e.code);
       
       if (e.code === 'Escape') {
         onPause();
       }
       
+      // Jump logic with double jump
+      if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+        setPlayer(prev => {
+          if (prev.isGrounded) {
+            const jumpForce = prev.hasCoffee ? JUMP_FORCE + COFFEE_JUMP_BOOST : JUMP_FORCE;
+            return {
+              ...prev,
+              velocityY: jumpForce,
+              isJumping: true,
+              isGrounded: false,
+              hasDoubleJumped: false,
+            };
+          } else if (prev.canDoubleJump && !prev.hasDoubleJumped) {
+            const jumpForce = prev.hasCoffee ? JUMP_FORCE + COFFEE_JUMP_BOOST : JUMP_FORCE;
+            return {
+              ...prev,
+              velocityY: jumpForce * 0.85,
+              hasDoubleJumped: true,
+            };
+          }
+          return prev;
+        });
+      }
+      
       // Shoot projectile
-      if (e.code === 'KeyJ' && player.hasWifi) {
-        const newProjectile: Projectile = {
-          id: `proj-${Date.now()}`,
-          x: player.x + (player.facingRight ? player.width : 0),
-          y: player.y + player.height / 2,
-          velocityX: player.facingRight ? PROJECTILE_SPEED : -PROJECTILE_SPEED,
-          active: true,
-        };
-        setProjectiles(prev => [...prev, newProjectile]);
+      if (e.code === 'KeyJ') {
+        setPlayer(prev => {
+          if (prev.hasWifi) {
+            const newProjectile: Projectile = {
+              id: `proj-${Date.now()}`,
+              x: prev.x + (prev.facingRight ? prev.width : 0),
+              y: prev.y + prev.height / 2,
+              velocityX: prev.facingRight ? PROJECTILE_SPEED : -PROJECTILE_SPEED,
+              active: true,
+            };
+            setProjectiles(projs => [...projs, newProjectile]);
+          }
+          return prev;
+        });
       }
     };
 
@@ -117,7 +217,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [player.hasWifi, player.facingRight, player.x, player.y, player.width, player.height, onPause]);
+  }, [onPause]);
 
   // Collision detection
   const checkCollision = useCallback((
@@ -136,8 +236,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         let newPlayer = { ...prevPlayer };
         const keys = keysRef.current;
 
-        // Movement
-        const speed = newPlayer.hasCoffee ? MOVE_SPEED + COFFEE_SPEED_BOOST : MOVE_SPEED;
+        // Movement with character speed modifier
+        const baseSpeed = newPlayer.hasCoffee ? MOVE_SPEED + COFFEE_SPEED_BOOST : MOVE_SPEED;
+        const speed = baseSpeed * modifiers.speedMod;
         
         if (keys.has('ArrowLeft') || keys.has('KeyA')) {
           newPlayer.velocityX = -speed;
@@ -149,16 +250,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
           newPlayer.velocityX = 0;
         }
 
-        // Jump
-        if ((keys.has('Space') || keys.has('ArrowUp') || keys.has('KeyW')) && newPlayer.isGrounded) {
-          const jumpForce = newPlayer.hasCoffee ? JUMP_FORCE + COFFEE_JUMP_BOOST : JUMP_FORCE;
-          newPlayer.velocityY = jumpForce;
-          newPlayer.isJumping = true;
-          newPlayer.isGrounded = false;
-        }
-
-        // Apply gravity
-        newPlayer.velocityY += GRAVITY;
+        // Apply gravity with character modifier (designer floats)
+        newPlayer.velocityY += GRAVITY * modifiers.gravityMod;
 
         // Update position
         newPlayer.x += newPlayer.velocityX;
@@ -175,7 +268,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         level.platforms.forEach(platform => {
           let platX = platform.x;
           
-          // Moving platform
           if (platform.type === 'moving' && platform.movingRange && platform.movingSpeed) {
             const range = platform.movingRange.max - platform.movingRange.min;
             const offset = Math.sin(gameTime * 0.02 * platform.movingSpeed) * range / 2;
@@ -186,21 +278,19 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             newPlayer.x, newPlayer.y, newPlayer.width, newPlayer.height,
             platX, platform.y, platform.width, platform.height
           )) {
-            // Top collision (landing)
             if (newPlayer.velocityY > 0 && 
                 prevPlayer.y + prevPlayer.height <= platform.y + 10) {
               newPlayer.y = platform.y - newPlayer.height;
               newPlayer.velocityY = 0;
               newPlayer.isGrounded = true;
               newPlayer.isJumping = false;
+              newPlayer.hasDoubleJumped = false;
             }
-            // Bottom collision
             else if (newPlayer.velocityY < 0 && 
                      prevPlayer.y >= platform.y + platform.height - 10) {
               newPlayer.y = platform.y + platform.height;
               newPlayer.velocityY = 0;
             }
-            // Side collision
             else if (platform.type !== 'platform') {
               if (newPlayer.velocityX > 0) {
                 newPlayer.x = platX - newPlayer.width;
@@ -244,7 +334,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
           let newEnemy = { ...enemy };
           newEnemy.x += newEnemy.velocityX;
 
-          // Reverse direction at edges or after some distance
           const onPlatform = level.platforms.some(p => 
             newEnemy.x >= p.x && newEnemy.x + newEnemy.width <= p.x + p.width &&
             Math.abs(newEnemy.y + newEnemy.height - p.y) < 10
@@ -269,14 +358,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             newPlayer.x, newPlayer.y, newPlayer.width, newPlayer.height,
             enemy.x, enemy.y, enemy.width, enemy.height
           )) {
-            // Stomp from above
             if (newPlayer.velocityY > 0 && newPlayer.y + newPlayer.height < enemy.y + enemy.height / 2) {
               setEnemies(prev => prev.map((e, i) => 
                 i === index ? { ...e, alive: false } : e
               ));
               newPlayer.velocityY = JUMP_FORCE / 2;
             } else {
-              // Hit from side - game over
               onGameOver();
             }
           }
@@ -292,7 +379,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
           
           const newProj = { ...proj, x: proj.x + proj.velocityX };
           
-          // Check collision with enemies
           enemies.forEach((enemy, index) => {
             if (enemy.alive && checkCollision(
               newProj.x, newProj.y - 10, 20, 20,
@@ -305,7 +391,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             }
           });
 
-          // Remove if out of bounds
           if (newProj.x < cameraX - 100 || newProj.x > cameraX + 900) {
             return false;
           }
@@ -314,15 +399,23 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         }).map(proj => ({ ...proj, x: proj.x + proj.velocityX }));
       });
 
-      // Power-up collection
+      // Power-up collection with social media's increased range
+      const collectRadius = 32 * modifiers.collectRadius;
       setPowerUps(prevPowerUps => {
         return prevPowerUps.map(powerUp => {
           if (powerUp.collected) return powerUp;
 
-          if (checkCollision(
-            player.x, player.y, player.width, player.height,
-            powerUp.x, powerUp.y, 32, 32
-          )) {
+          const playerCenterX = player.x + player.width / 2;
+          const playerCenterY = player.y + player.height / 2;
+          const powerUpCenterX = powerUp.x + 16;
+          const powerUpCenterY = powerUp.y + 16;
+          
+          const distance = Math.sqrt(
+            Math.pow(playerCenterX - powerUpCenterX, 2) + 
+            Math.pow(playerCenterY - powerUpCenterY, 2)
+          );
+
+          if (distance < collectRadius + 20) {
             setPlayer(prev => {
               switch (powerUp.type) {
                 case 'coffee':
@@ -359,7 +452,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [level, enemies, player, projectiles, cameraX, gameTime, checkCollision, onGameOver, onLevelComplete]);
+  }, [level, enemies, player, projectiles, cameraX, gameTime, checkCollision, onGameOver, onLevelComplete, modifiers]);
 
   // Render
   useEffect(() => {
@@ -369,7 +462,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Draw background
@@ -392,16 +484,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     ctx.fillStyle = bgGradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw background elements
+    // Draw background buildings
     if (level.background === 'urban' || level.background === 'sunset') {
-      // Buildings
       ctx.fillStyle = '#455A64';
       for (let i = 0; i < 10; i++) {
         const bx = (i * 200 - cameraX * 0.3) % (canvas.width + 200) - 100;
         const bh = 100 + Math.sin(i) * 50;
         ctx.fillRect(bx, canvas.height - 80 - bh, 80, bh);
         
-        // Windows
         ctx.fillStyle = '#FFF59D';
         for (let wy = 0; wy < bh - 20; wy += 25) {
           for (let wx = 10; wx < 70; wx += 20) {
@@ -414,10 +504,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
       }
     }
 
-    // Draw platforms
     ctx.save();
     ctx.translate(-cameraX, 0);
 
+    // Draw platforms
     level.platforms.forEach(platform => {
       let platX = platform.x;
       
@@ -449,10 +539,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         case 'building':
           ctx.fillStyle = '#37474F';
           ctx.fillRect(platX, platform.y, platform.width, platform.height);
-          // Door
           ctx.fillStyle = '#FF9800';
           ctx.fillRect(platX + platform.width / 2 - 25, platform.y + platform.height - 80, 50, 80);
-          // Windows
           ctx.fillStyle = '#FFF59D';
           for (let wy = 20; wy < platform.height - 100; wy += 40) {
             for (let wx = 20; wx < platform.width - 30; wx += 50) {
@@ -470,82 +558,110 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     ctx.font = '40px sans-serif';
     ctx.fillText('🚪', level.goal.x + 10, level.goal.y + 60);
 
-    // Draw power-ups
+    // Draw power-ups with sprites
     powerUps.forEach(powerUp => {
       if (powerUp.collected) return;
 
       const bounceY = Math.sin(gameTime * 0.1 + powerUp.x * 0.01) * 5;
-      ctx.font = '28px sans-serif';
+      const size = 40;
       
+      let sprite: HTMLImageElement | null = null;
       switch (powerUp.type) {
         case 'coffee':
-          ctx.fillText('☕', powerUp.x, powerUp.y + bounceY);
+          sprite = images.coffee;
           break;
         case 'wifi':
-          ctx.fillText('📶', powerUp.x, powerUp.y + bounceY);
+          sprite = images.wifi;
           break;
         case 'networking':
-          ctx.fillText('🤝', powerUp.x, powerUp.y + bounceY);
+          sprite = images.networking;
           break;
+      }
+
+      if (sprite) {
+        ctx.drawImage(sprite, powerUp.x - 4, powerUp.y + bounceY - 8, size, size);
       }
     });
 
-    // Draw enemies
+    // Draw enemies with sprites
     enemies.forEach(enemy => {
       if (!enemy.alive) return;
       
-      ctx.save();
-      if (enemy.velocityX > 0) {
-        ctx.translate(enemy.x + enemy.width, enemy.y);
-        ctx.scale(-1, 1);
-        ctx.font = '36px sans-serif';
-        ctx.fillText('🦥', 0, enemy.height);
-      } else {
-        ctx.font = '36px sans-serif';
-        ctx.fillText('🦥', enemy.x, enemy.y + enemy.height);
+      if (images.sloth) {
+        ctx.save();
+        if (enemy.velocityX > 0) {
+          ctx.translate(enemy.x + enemy.width, enemy.y);
+          ctx.scale(-1, 1);
+          ctx.drawImage(images.sloth, 0, 0, enemy.width + 10, enemy.height + 10);
+        } else {
+          ctx.drawImage(images.sloth, enemy.x, enemy.y, enemy.width + 10, enemy.height + 10);
+        }
+        ctx.restore();
       }
-      ctx.restore();
     });
 
     // Draw projectiles
     projectiles.forEach(proj => {
       if (!proj.active) return;
-      ctx.fillStyle = '#2196F3';
+      
+      // Glowing wifi projectile
+      const gradient = ctx.createRadialGradient(proj.x, proj.y, 0, proj.x, proj.y, 12);
+      gradient.addColorStop(0, '#64B5F6');
+      gradient.addColorStop(0.5, '#2196F3');
+      gradient.addColorStop(1, 'rgba(33, 150, 243, 0)');
+      ctx.fillStyle = gradient;
       ctx.beginPath();
-      ctx.arc(proj.x, proj.y, 8, 0, Math.PI * 2);
+      ctx.arc(proj.x, proj.y, 12, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#64B5F6';
+      
+      ctx.fillStyle = '#BBDEFB';
       ctx.beginPath();
-      ctx.arc(proj.x, proj.y, 4, 0, Math.PI * 2);
+      ctx.arc(proj.x, proj.y, 5, 0, Math.PI * 2);
       ctx.fill();
     });
 
-    // Draw player
-    ctx.save();
-    if (!player.facingRight) {
-      ctx.translate(player.x + player.width, player.y);
-      ctx.scale(-1, 1);
-      ctx.font = '44px sans-serif';
-      ctx.fillText(character.emoji, 0, player.height);
-    } else {
-      ctx.font = '44px sans-serif';
-      ctx.fillText(character.emoji, player.x, player.y + player.height);
-    }
-    ctx.restore();
-
-    // Coffee effect glow
-    if (player.hasCoffee) {
+    // Draw player with sprite
+    if (images.character) {
       ctx.save();
-      ctx.globalAlpha = 0.3 + Math.sin(gameTime * 0.2) * 0.1;
-      ctx.fillStyle = '#FF9800';
-      ctx.beginPath();
-      ctx.arc(player.x + player.width / 2, player.y + player.height / 2, 40, 0, Math.PI * 2);
-      ctx.fill();
+      
+      // Coffee effect glow
+      if (player.hasCoffee) {
+        ctx.globalAlpha = 0.3 + Math.sin(gameTime * 0.2) * 0.1;
+        const coffeeGlow = ctx.createRadialGradient(
+          player.x + player.width / 2, player.y + player.height / 2, 0,
+          player.x + player.width / 2, player.y + player.height / 2, 50
+        );
+        coffeeGlow.addColorStop(0, '#FF9800');
+        coffeeGlow.addColorStop(1, 'rgba(255, 152, 0, 0)');
+        ctx.fillStyle = coffeeGlow;
+        ctx.beginPath();
+        ctx.arc(player.x + player.width / 2, player.y + player.height / 2, 50, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      // Double jump indicator
+      if (player.canDoubleJump && !player.isGrounded && !player.hasDoubleJumped) {
+        ctx.globalAlpha = 0.5 + Math.sin(gameTime * 0.3) * 0.2;
+        ctx.fillStyle = '#4CAF50';
+        ctx.beginPath();
+        ctx.arc(player.x + player.width / 2, player.y + player.height + 5, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      if (!player.facingRight) {
+        ctx.translate(player.x + player.width, player.y);
+        ctx.scale(-1, 1);
+        ctx.drawImage(images.character, 0, 0, player.width, player.height);
+      } else {
+        ctx.drawImage(images.character, player.x, player.y, player.width, player.height);
+      }
       ctx.restore();
     }
 
     ctx.restore();
-  }, [player, enemies, powerUps, projectiles, level, cameraX, gameTime, character]);
+  }, [player, enemies, powerUps, projectiles, level, cameraX, gameTime, images]);
 
   const networkingTotal = level.powerUps.filter(p => p.type === 'networking').length;
 
@@ -554,12 +670,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
       <GameHUD
         levelName={level.name}
         characterName={character.name}
-        characterEmoji={character.emoji}
+        characterSprite={character.sprite}
+        passiveName={character.passive.name}
+        passiveIcon={character.passive.icon}
         networkingCollected={player.networkingCollected}
         networkingTotal={networkingTotal}
         hasCoffee={player.hasCoffee}
         coffeeTimer={player.coffeeTimer}
         hasWifi={player.hasWifi}
+        canDoubleJump={player.canDoubleJump}
+        hasDoubleJumped={player.hasDoubleJumped}
+        isGrounded={player.isGrounded}
         onPause={onPause}
       />
       <canvas

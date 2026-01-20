@@ -1,5 +1,11 @@
 import React from 'react';
-import { Play, Info, Volume2 } from 'lucide-react';
+import { Play, Info } from 'lucide-react';
+import { characters } from '@/data/characters';
+
+import coffeeSprite from '@/assets/sprites/coffee.png';
+import wifiSprite from '@/assets/sprites/wifi.png';
+import networkingSprite from '@/assets/sprites/networking.png';
+import slothSprite from '@/assets/sprites/sloth.png';
 
 interface MainMenuProps {
   onStartGame: () => void;
@@ -30,7 +36,6 @@ const MainMenu: React.FC<MainMenuProps> = ({ onStartGame }) => {
       <div className="absolute bottom-0 left-0 right-0 h-32" 
         style={{ background: 'linear-gradient(to top, hsl(30, 50%, 35%), hsl(100, 40%, 45%))' }}
       >
-        {/* Grass details */}
         <div className="absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-green-500 to-transparent" />
       </div>
 
@@ -60,7 +65,6 @@ const MainMenu: React.FC<MainMenuProps> = ({ onStartGame }) => {
           ADVENTURE
         </p>
 
-        {/* Subtitle */}
         <p className="font-game text-lg text-white/90 mb-12 max-w-md mx-auto drop-shadow-md">
           Enfrente a procrastinação e conquiste o sucesso no mundo corporativo!
         </p>
@@ -98,22 +102,38 @@ const MainMenu: React.FC<MainMenuProps> = ({ onStartGame }) => {
         </div>
       </div>
 
-      {/* Power-ups preview */}
+      {/* Power-ups preview with sprites */}
       <div className="absolute bottom-40 left-1/2 -translate-x-1/2 flex gap-6 z-10">
-        <div className="power-up-icon power-up-coffee animate-float text-2xl" style={{ animationDelay: '0s' }}>
-          ☕
+        <div className="animate-float" style={{ animationDelay: '0s' }}>
+          <img src={coffeeSprite} alt="Coffee" className="w-12 h-12 object-contain" />
         </div>
-        <div className="power-up-icon power-up-wifi animate-float text-2xl" style={{ animationDelay: '0.5s' }}>
-          📶
+        <div className="animate-float" style={{ animationDelay: '0.5s' }}>
+          <img src={wifiSprite} alt="Wi-Fi" className="w-12 h-12 object-contain" />
         </div>
-        <div className="power-up-icon power-up-networking animate-float text-2xl" style={{ animationDelay: '1s' }}>
-          🤝
+        <div className="animate-float" style={{ animationDelay: '1s' }}>
+          <img src={networkingSprite} alt="Networking" className="w-12 h-12 object-contain" />
         </div>
       </div>
 
-      {/* Character teaser */}
-      <div className="absolute bottom-36 right-8 text-4xl animate-bounce-slow">
-        🦥
+      {/* Sloth enemy with sprite */}
+      <div className="absolute bottom-36 right-8 animate-bounce-slow z-10">
+        <img src={slothSprite} alt="Sloth" className="w-16 h-16 object-contain" />
+      </div>
+
+      {/* Character previews */}
+      <div className="absolute bottom-36 left-8 flex -space-x-4 z-10">
+        {characters.slice(0, 3).map((char, i) => (
+          <img 
+            key={char.id}
+            src={char.sprite} 
+            alt={char.name}
+            className="w-14 h-14 object-contain rounded-full border-2 border-white/50 animate-float"
+            style={{ 
+              animationDelay: `${i * 0.3}s`,
+              background: char.color,
+            }}
+          />
+        ))}
       </div>
     </div>
   );

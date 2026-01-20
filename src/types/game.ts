@@ -1,11 +1,19 @@
 export type CharacterId = 'entrepreneur' | 'designer' | 'programmer' | 'socialmedia' | 'gestor';
 
+export interface CharacterPassive {
+  name: string;
+  description: string;
+  icon: string;
+}
+
 export interface Character {
   id: CharacterId;
   name: string;
   description: string;
   color: string;
   emoji: string;
+  sprite: string;
+  passive: CharacterPassive;
 }
 
 export type PowerUpType = 'coffee' | 'wifi' | 'networking';
@@ -60,6 +68,8 @@ export interface Player {
   hasWifi: boolean;
   coffeeTimer: number;
   networkingCollected: number;
+  canDoubleJump: boolean;
+  hasDoubleJumped: boolean;
 }
 
 export interface Level {
