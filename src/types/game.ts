@@ -26,6 +26,8 @@ export interface PowerUp {
   collected: boolean;
 }
 
+export type EnemyType = 'sloth' | 'deadline' | 'spam' | 'boss';
+
 export interface Enemy {
   id: string;
   x: number;
@@ -33,12 +35,20 @@ export interface Enemy {
   width: number;
   height: number;
   velocityX: number;
+  velocityY: number;
   alive: boolean;
-  type?: 'sloth' | 'boss';
+  type: EnemyType;
   health?: number;
   maxHealth?: number;
   phase?: number;
   attackCooldown?: number;
+  jumpCooldown?: number;
+  patrolMin?: number;
+  patrolMax?: number;
+  aggroRange?: number;
+  isAggro?: boolean;
+  stunned?: boolean;
+  stunnedTimer?: number;
 }
 
 export interface Platform {

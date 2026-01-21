@@ -1,10 +1,13 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Level, Player, Enemy, PowerUp, Projectile, CharacterId, BackgroundType } from '@/types/game';
 import { characters } from '@/data/characters';
+import { updateEnemyAI, EnemyProjectile } from './EnemyAI';
 import GameHUD from './GameHUD';
 
 // Import sprites
 import slothSprite from '@/assets/sprites/sloth.png';
+import deadlineSprite from '@/assets/sprites/deadline.png';
+import spamSprite from '@/assets/sprites/spam.png';
 import bossSprite from '@/assets/sprites/boss.png';
 import coffeeSprite from '@/assets/sprites/coffee.png';
 import wifiSprite from '@/assets/sprites/wifi.png';
@@ -498,6 +501,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
   const [images, setImages] = useState<{
     character: HTMLImageElement | null;
     sloth: HTMLImageElement | null;
+    deadline: HTMLImageElement | null;
+    spam: HTMLImageElement | null;
     boss: HTMLImageElement | null;
     coffee: HTMLImageElement | null;
     wifi: HTMLImageElement | null;
@@ -505,6 +510,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
   }>({
     character: null,
     sloth: null,
+    deadline: null,
+    spam: null,
     boss: null,
     coffee: null,
     wifi: null,
@@ -523,14 +530,18 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     Promise.all([
       loadImage(character.sprite),
       loadImage(slothSprite),
+      loadImage(deadlineSprite),
+      loadImage(spamSprite),
       loadImage(bossSprite),
       loadImage(coffeeSprite),
       loadImage(wifiSprite),
       loadImage(networkingSprite),
-    ]).then(([charImg, slothImg, bossImg, coffeeImg, wifiImg, networkingImg]) => {
+    ]).then(([charImg, slothImg, deadlineImg, spamImg, bossImg, coffeeImg, wifiImg, networkingImg]) => {
       setImages({
         character: charImg,
         sloth: slothImg,
+        deadline: deadlineImg,
+        spam: spamImg,
         boss: bossImg,
         coffee: coffeeImg,
         wifi: wifiImg,
@@ -791,73 +802,20 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         return newPlayer;
       });
 
-      // Update enemies and boss
+      // Update enemies with new AI system
       setEnemies(prevEnemies => {
         return prevEnemies.map(enemy => {
           if (!enemy.alive) return enemy;
-
-          let newEnemy = { ...enemy };
           
-          // Boss behavior
-          if (enemy.type === 'boss') {
-            // Boss movement pattern
-            const bossPhase = enemy.phase || 1;
-            const moveSpeed = 1.5 + bossPhase * 0.5;
-            
-            // Move towards player
-            if (player.x > newEnemy.x + newEnemy.width) {
-              newEnemy.velocityX = moveSpeed;
-            } else if (player.x + player.width < newEnemy.x) {
-              newEnemy.velocityX = -moveSpeed;
-            } else {
-              newEnemy.velocityX = 0;
+          return updateEnemyAI(
+            enemy,
+            player,
+            level.platforms,
+            gameTime,
+            (proj: EnemyProjectile) => {
+              setBossProjectiles(prev => [...prev, proj]);
             }
-            
-            newEnemy.x += newEnemy.velocityX;
-            
-            // Boss attack
-            if (newEnemy.attackCooldown !== undefined) {
-              newEnemy.attackCooldown--;
-              if (newEnemy.attackCooldown <= 0) {
-                // Fire projectile at player
-                const bossProjectile: Projectile = {
-                  id: `boss-proj-${Date.now()}`,
-                  x: newEnemy.x + newEnemy.width / 2,
-                  y: newEnemy.y + newEnemy.height / 2,
-                  velocityX: player.x > newEnemy.x ? 6 : -6,
-                  velocityY: (player.y - newEnemy.y) * 0.02,
-                  active: true,
-                  type: 'boss',
-                };
-                setBossProjectiles(prev => [...prev, bossProjectile]);
-                newEnemy.attackCooldown = 120 - bossPhase * 20; // Faster attacks in later phases
-              }
-            }
-            
-            // Change phase based on health
-            const healthPercent = (enemy.health || 0) / (enemy.maxHealth || 10);
-            if (healthPercent <= 0.3) {
-              newEnemy.phase = 3;
-            } else if (healthPercent <= 0.6) {
-              newEnemy.phase = 2;
-            }
-            
-            return newEnemy;
-          }
-          
-          // Regular sloth enemy behavior
-          newEnemy.x += newEnemy.velocityX;
-
-          const onPlatform = level.platforms.some(p => 
-            newEnemy.x >= p.x && newEnemy.x + newEnemy.width <= p.x + p.width &&
-            Math.abs(newEnemy.y + newEnemy.height - p.y) < 10
           );
-
-          if (!onPlatform || newEnemy.x < 0 || newEnemy.x > level.width - newEnemy.width) {
-            newEnemy.velocityX *= -1;
-          }
-
-          return newEnemy;
         });
       });
 
@@ -1222,15 +1180,22 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
           ctx.textAlign = 'left';
         }
       } else {
-        // Regular sloth enemy
-        if (images.sloth) {
+        // Regular enemies (sloth, deadline, spam)
+        let sprite: HTMLImageElement | null = null;
+        switch (enemy.type) {
+          case 'sloth': sprite = images.sloth; break;
+          case 'deadline': sprite = images.deadline; break;
+          case 'spam': sprite = images.spam; break;
+        }
+        
+        if (sprite) {
           ctx.save();
           if (enemy.velocityX > 0) {
             ctx.translate(enemy.x + enemy.width, enemy.y);
             ctx.scale(-1, 1);
-            ctx.drawImage(images.sloth, 0, 0, enemy.width + 10, enemy.height + 10);
+            ctx.drawImage(sprite, 0, 0, enemy.width + 10, enemy.height + 10);
           } else {
-            ctx.drawImage(images.sloth, enemy.x, enemy.y, enemy.width + 10, enemy.height + 10);
+            ctx.drawImage(sprite, enemy.x, enemy.y, enemy.width + 10, enemy.height + 10);
           }
           ctx.restore();
         }
