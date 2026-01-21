@@ -39,7 +39,8 @@ export const useGameState = () => {
         : [...prev.completedLevels, levelId];
       
       const nextLevelId = levelId + 1;
-      const newUnlocked = nextLevelId <= 3 && !prev.unlockedLevels.includes(nextLevelId)
+      // Agora temos 6 fases jogáveis
+      const newUnlocked = nextLevelId <= 6 && !prev.unlockedLevels.includes(nextLevelId)
         ? [...prev.unlockedLevels, nextLevelId]
         : prev.unlockedLevels;
 
@@ -54,12 +55,16 @@ export const useGameState = () => {
     setLevels(prev => prev.map(level => 
       level.id === levelId 
         ? { ...level, completed: true }
-        : level.id === levelId + 1 && levelId < 3
+        : level.id === levelId + 1 && levelId < 6
           ? { ...level, unlocked: true }
           : level
     ));
 
     setGameState('level-complete');
+  }, []);
+
+  const bossDefeated = useCallback(() => {
+    setGameState('boss-defeated');
   }, []);
 
   const goToMenu = useCallback(() => {
@@ -99,6 +104,7 @@ export const useGameState = () => {
     startGame,
     selectLevel,
     completeLevel,
+    bossDefeated,
     goToMenu,
     goToCharacterSelect,
     goToLevelSelect,

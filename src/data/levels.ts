@@ -8,6 +8,22 @@ const createEnemy = (x: number, y: number, velocityX: number = -1): Enemy => ({
   height: 40,
   velocityX,
   alive: true,
+  type: 'sloth',
+});
+
+const createBoss = (x: number, y: number): Enemy => ({
+  id: 'boss-micromanager',
+  x,
+  y,
+  width: 120,
+  height: 100,
+  velocityX: 0,
+  alive: true,
+  type: 'boss',
+  health: 10,
+  maxHealth: 10,
+  phase: 1,
+  attackCooldown: 0,
 });
 
 const createPowerUp = (x: number, y: number, type: 'coffee' | 'wifi' | 'networking'): PowerUp => ({
@@ -136,23 +152,23 @@ export const levels: Level[] = [
       { x: 0, y: 520, width: 3600, height: 80, type: 'ground' },
       
       // Desks as platforms
-      { x: 150, y: 440, width: 180, height: 80, type: 'platform' },
+      { x: 150, y: 440, width: 180, height: 80, type: 'desk' },
       { x: 500, y: 400, width: 150, height: 24, type: 'platform' },
       { x: 750, y: 350, width: 120, height: 24, type: 'platform' },
-      { x: 1000, y: 440, width: 200, height: 80, type: 'platform' },
+      { x: 1000, y: 440, width: 200, height: 80, type: 'desk' },
       { x: 1300, y: 380, width: 150, height: 24, type: 'platform' },
       { x: 1550, y: 320, width: 120, height: 24, type: 'platform' },
       { x: 1800, y: 400, width: 180, height: 24, type: 'platform' },
-      { x: 2100, y: 440, width: 200, height: 80, type: 'platform' },
+      { x: 2100, y: 440, width: 200, height: 80, type: 'desk' },
       { x: 2400, y: 360, width: 150, height: 24, type: 'platform' },
       { x: 2650, y: 300, width: 120, height: 24, type: 'platform' },
       { x: 2900, y: 380, width: 150, height: 24, type: 'platform' },
       { x: 3150, y: 320, width: 120, height: 24, type: 'platform' },
       
       // Meeting room platforms
-      { x: 900, y: 280, width: 100, height: 24, type: 'platform' },
-      { x: 1700, y: 240, width: 100, height: 24, type: 'platform' },
-      { x: 2500, y: 220, width: 100, height: 24, type: 'platform' },
+      { x: 900, y: 280, width: 100, height: 24, type: 'glass' },
+      { x: 1700, y: 240, width: 100, height: 24, type: 'glass' },
+      { x: 2500, y: 220, width: 100, height: 24, type: 'glass' },
       
       // Moving chairs
       { x: 400, y: 480, width: 80, height: 40, type: 'moving', movingRange: { min: 350, max: 500 }, movingSpeed: 1 },
@@ -181,12 +197,198 @@ export const levels: Level[] = [
       createPowerUp(2450, 310, 'networking'),
     ],
   },
+  // FASE 4 - SALA DE REUNIÕES (COM BOSS!)
+  {
+    id: 4,
+    name: 'Sala de Reuniões',
+    description: 'Enfrente o terrível Gerente Micromanager!',
+    unlocked: false,
+    completed: false,
+    width: 2400,
+    background: 'meeting',
+    goal: { x: 2300, y: 400 },
+    hasBoss: true,
+    bossId: 'boss-micromanager',
+    platforms: [
+      // Main floor
+      { x: 0, y: 520, width: 2400, height: 80, type: 'ground' },
+      
+      // Conference table in center
+      { x: 800, y: 420, width: 400, height: 100, type: 'desk' },
+      
+      // Side platforms
+      { x: 100, y: 400, width: 150, height: 24, type: 'glass' },
+      { x: 300, y: 320, width: 120, height: 24, type: 'platform' },
+      { x: 500, y: 250, width: 100, height: 24, type: 'glass' },
+      
+      { x: 1400, y: 380, width: 150, height: 24, type: 'platform' },
+      { x: 1600, y: 300, width: 120, height: 24, type: 'glass' },
+      { x: 1800, y: 380, width: 150, height: 24, type: 'platform' },
+      { x: 2000, y: 300, width: 120, height: 24, type: 'platform' },
+      
+      // Upper platforms for boss fight
+      { x: 600, y: 200, width: 150, height: 24, type: 'platform' },
+      { x: 900, y: 150, width: 200, height: 24, type: 'glass' },
+      { x: 1250, y: 200, width: 150, height: 24, type: 'platform' },
+    ],
+    enemies: [
+      createEnemy(200, 480),
+      createEnemy(400, 480),
+      createBoss(900, 320),
+    ],
+    powerUps: [
+      createPowerUp(150, 350, 'coffee'),
+      createPowerUp(550, 200, 'wifi'),
+      createPowerUp(1650, 250, 'coffee'),
+      createPowerUp(350, 270, 'networking'),
+      createPowerUp(1000, 100, 'networking'),
+      createPowerUp(1850, 330, 'networking'),
+    ],
+  },
+  // FASE 5 - ROOFTOP
+  {
+    id: 5,
+    name: 'Rooftop',
+    description: 'Vista panorâmica da cidade!',
+    unlocked: false,
+    completed: false,
+    width: 4000,
+    background: 'rooftop',
+    goal: { x: 3900, y: 300 },
+    platforms: [
+      // Rooftop sections with gaps
+      { x: 0, y: 520, width: 400, height: 80, type: 'rooftop' },
+      { x: 500, y: 480, width: 300, height: 120, type: 'rooftop' },
+      { x: 900, y: 520, width: 400, height: 80, type: 'rooftop' },
+      { x: 1400, y: 450, width: 300, height: 150, type: 'rooftop' },
+      { x: 1800, y: 520, width: 400, height: 80, type: 'rooftop' },
+      { x: 2300, y: 480, width: 300, height: 120, type: 'rooftop' },
+      { x: 2700, y: 520, width: 500, height: 80, type: 'rooftop' },
+      { x: 3300, y: 450, width: 300, height: 150, type: 'rooftop' },
+      { x: 3700, y: 520, width: 300, height: 80, type: 'rooftop' },
+      
+      // Floating glass platforms
+      { x: 350, y: 380, width: 100, height: 20, type: 'glass' },
+      { x: 750, y: 320, width: 100, height: 20, type: 'glass' },
+      { x: 1200, y: 350, width: 120, height: 20, type: 'glass' },
+      { x: 1650, y: 280, width: 100, height: 20, type: 'glass' },
+      { x: 2100, y: 350, width: 120, height: 20, type: 'glass' },
+      { x: 2550, y: 300, width: 100, height: 20, type: 'glass' },
+      { x: 3050, y: 350, width: 120, height: 20, type: 'glass' },
+      { x: 3550, y: 300, width: 100, height: 20, type: 'glass' },
+      
+      // Moving platforms between gaps
+      { x: 420, y: 450, width: 80, height: 24, type: 'moving', movingRange: { min: 400, max: 500 }, movingSpeed: 1.2 },
+      { x: 1320, y: 400, width: 80, height: 24, type: 'moving', movingRange: { min: 1300, max: 1400 }, movingSpeed: 1.5 },
+      { x: 2220, y: 430, width: 80, height: 24, type: 'moving', movingRange: { min: 2200, max: 2300 }, movingSpeed: 1 },
+      { x: 3220, y: 400, width: 80, height: 24, type: 'moving', movingRange: { min: 3200, max: 3300 }, movingSpeed: 1.3 },
+    ],
+    enemies: [
+      createEnemy(200, 480),
+      createEnemy(600, 440),
+      createEnemy(1000, 480),
+      createEnemy(1500, 410),
+      createEnemy(1900, 480),
+      createEnemy(2400, 440),
+      createEnemy(2850, 480),
+      createEnemy(3400, 410),
+      createEnemy(3750, 480),
+    ],
+    powerUps: [
+      createPowerUp(400, 330, 'coffee'),
+      createPowerUp(1250, 300, 'wifi'),
+      createPowerUp(2150, 300, 'coffee'),
+      createPowerUp(3100, 300, 'wifi'),
+      createPowerUp(800, 270, 'networking'),
+      createPowerUp(1700, 230, 'networking'),
+      createPowerUp(2600, 250, 'networking'),
+    ],
+  },
+  // FASE 6 - HAPPY HOUR
+  {
+    id: 6,
+    name: 'Happy Hour',
+    description: 'A festa de celebração do coworking!',
+    unlocked: false,
+    completed: false,
+    width: 4500,
+    background: 'happyhour',
+    goal: { x: 4400, y: 400 },
+    platforms: [
+      // Bar counter and floor
+      { x: 0, y: 520, width: 600, height: 80, type: 'ground' },
+      { x: 700, y: 520, width: 500, height: 80, type: 'ground' },
+      { x: 1300, y: 520, width: 400, height: 80, type: 'ground' },
+      { x: 1800, y: 520, width: 600, height: 80, type: 'ground' },
+      { x: 2500, y: 520, width: 500, height: 80, type: 'ground' },
+      { x: 3100, y: 520, width: 400, height: 80, type: 'ground' },
+      { x: 3600, y: 520, width: 900, height: 80, type: 'ground' },
+      
+      // Bar stools and tables
+      { x: 150, y: 460, width: 80, height: 60, type: 'desk' },
+      { x: 350, y: 460, width: 80, height: 60, type: 'desk' },
+      { x: 800, y: 420, width: 150, height: 100, type: 'desk' },
+      { x: 1100, y: 460, width: 80, height: 60, type: 'desk' },
+      { x: 1400, y: 440, width: 120, height: 80, type: 'desk' },
+      { x: 1900, y: 420, width: 150, height: 100, type: 'desk' },
+      { x: 2200, y: 460, width: 80, height: 60, type: 'desk' },
+      { x: 2600, y: 440, width: 120, height: 80, type: 'desk' },
+      { x: 2900, y: 460, width: 80, height: 60, type: 'desk' },
+      { x: 3200, y: 420, width: 150, height: 100, type: 'desk' },
+      { x: 3700, y: 440, width: 120, height: 80, type: 'desk' },
+      { x: 4000, y: 460, width: 80, height: 60, type: 'desk' },
+      
+      // Upper platforms (speaker stands, decoration)
+      { x: 200, y: 350, width: 100, height: 24, type: 'platform' },
+      { x: 450, y: 280, width: 120, height: 24, type: 'platform' },
+      { x: 950, y: 320, width: 100, height: 24, type: 'platform' },
+      { x: 1250, y: 350, width: 120, height: 24, type: 'platform' },
+      { x: 1550, y: 280, width: 100, height: 24, type: 'platform' },
+      { x: 2050, y: 320, width: 120, height: 24, type: 'platform' },
+      { x: 2350, y: 350, width: 100, height: 24, type: 'platform' },
+      { x: 2750, y: 280, width: 120, height: 24, type: 'platform' },
+      { x: 3050, y: 350, width: 100, height: 24, type: 'platform' },
+      { x: 3450, y: 320, width: 120, height: 24, type: 'platform' },
+      { x: 3850, y: 350, width: 100, height: 24, type: 'platform' },
+      { x: 4150, y: 280, width: 120, height: 24, type: 'platform' },
+      
+      // Moving disco platforms
+      { x: 600, y: 400, width: 80, height: 24, type: 'moving', movingRange: { min: 600, max: 700 }, movingSpeed: 1.5 },
+      { x: 1700, y: 380, width: 80, height: 24, type: 'moving', movingRange: { min: 1700, max: 1800 }, movingSpeed: 1.2 },
+      { x: 3000, y: 400, width: 80, height: 24, type: 'moving', movingRange: { min: 3000, max: 3100 }, movingSpeed: 1.3 },
+      { x: 3500, y: 380, width: 80, height: 24, type: 'moving', movingRange: { min: 3500, max: 3600 }, movingSpeed: 1 },
+    ],
+    enemies: [
+      createEnemy(250, 480),
+      createEnemy(500, 480),
+      createEnemy(850, 380),
+      createEnemy(1150, 480),
+      createEnemy(1500, 480),
+      createEnemy(1950, 380),
+      createEnemy(2300, 480),
+      createEnemy(2700, 480),
+      createEnemy(3000, 480),
+      createEnemy(3250, 380),
+      createEnemy(3550, 480),
+      createEnemy(3850, 480),
+      createEnemy(4100, 480),
+    ],
+    powerUps: [
+      createPowerUp(180, 410, 'coffee'),
+      createPowerUp(500, 230, 'wifi'),
+      createPowerUp(1000, 270, 'coffee'),
+      createPowerUp(1600, 230, 'wifi'),
+      createPowerUp(2400, 300, 'coffee'),
+      createPowerUp(3100, 270, 'wifi'),
+      createPowerUp(3900, 300, 'coffee'),
+      createPowerUp(300, 300, 'networking'),
+      createPowerUp(1300, 300, 'networking'),
+      createPowerUp(2800, 230, 'networking'),
+    ],
+  },
 ];
 
-// Placeholder levels for the map (not playable yet)
+// Placeholder level for the map (future expansion)
 export const futureLevels = [
-  { id: 4, name: 'Sala de Reuniões', description: 'Em breve...' },
-  { id: 5, name: 'Rooftop', description: 'Em breve...' },
-  { id: 6, name: 'Happy Hour', description: 'Em breve...' },
   { id: 7, name: 'Demo Day', description: 'Em breve...' },
 ];

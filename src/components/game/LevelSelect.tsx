@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Lock, Star, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Lock, Star, ChevronRight, Skull } from 'lucide-react';
 import { Level } from '@/types/game';
 import { futureLevels } from '@/data/levels';
 
@@ -30,15 +30,15 @@ const LevelSelect: React.FC<LevelSelectProps> = ({
     goal: { x: 0, y: 0 },
   }))];
 
-  // Map path coordinates
+  // Map path coordinates for 7 levels
   const pathPositions = [
-    { x: 15, y: 75 },
-    { x: 30, y: 60 },
-    { x: 50, y: 55 },
-    { x: 70, y: 45 },
-    { x: 85, y: 35 },
-    { x: 65, y: 25 },
-    { x: 45, y: 20 },
+    { x: 12, y: 80 },
+    { x: 28, y: 65 },
+    { x: 45, y: 55 },
+    { x: 62, y: 45 },
+    { x: 78, y: 35 },
+    { x: 60, y: 22 },
+    { x: 40, y: 15 },
   ];
 
   return (
@@ -94,9 +94,11 @@ const LevelSelect: React.FC<LevelSelectProps> = ({
       <div className="absolute inset-0">
         {allLevels.map((level, index) => {
           const pos = pathPositions[index];
+          if (!pos) return null;
           const isUnlocked = unlockedLevels.includes(level.id);
           const isCompleted = completedLevels.includes(level.id);
-          const isPlayable = level.id <= 3;
+          const isPlayable = level.id <= 6;
+          const hasBoss = 'hasBoss' in level && level.hasBoss;
 
           return (
             <div
@@ -110,10 +112,12 @@ const LevelSelect: React.FC<LevelSelectProps> = ({
                   ${isUnlocked && isPlayable ? 'hover:scale-110' : ''}`}
                 disabled={!isUnlocked || !isPlayable}
               >
-                {!isUnlocked || !isPlayable ? (
+              {!isUnlocked || !isPlayable ? (
                   <Lock className="w-6 h-6 text-gray-400" />
                 ) : isCompleted ? (
                   <Star className="w-6 h-6 text-yellow-600 fill-yellow-400" />
+                ) : hasBoss ? (
+                  <Skull className="w-6 h-6 text-red-400" />
                 ) : (
                   <span className="text-white font-bold">{level.id}</span>
                 )}

@@ -34,6 +34,11 @@ export interface Enemy {
   height: number;
   velocityX: number;
   alive: boolean;
+  type?: 'sloth' | 'boss';
+  health?: number;
+  maxHealth?: number;
+  phase?: number;
+  attackCooldown?: number;
 }
 
 export interface Platform {
@@ -41,7 +46,7 @@ export interface Platform {
   y: number;
   width: number;
   height: number;
-  type: 'ground' | 'platform' | 'moving' | 'building';
+  type: 'ground' | 'platform' | 'moving' | 'building' | 'desk' | 'glass' | 'rooftop';
   movingRange?: { min: number; max: number };
   movingSpeed?: number;
 }
@@ -51,7 +56,9 @@ export interface Projectile {
   x: number;
   y: number;
   velocityX: number;
+  velocityY?: number;
   active: boolean;
+  type?: 'wifi' | 'boss';
 }
 
 export interface Player {
@@ -70,7 +77,13 @@ export interface Player {
   networkingCollected: number;
   canDoubleJump: boolean;
   hasDoubleJumped: boolean;
+  health?: number;
+  maxHealth?: number;
+  invincible?: boolean;
+  invincibleTimer?: number;
 }
+
+export type BackgroundType = 'urban' | 'sunset' | 'coworking' | 'meeting' | 'rooftop' | 'happyhour';
 
 export interface Level {
   id: number;
@@ -81,12 +94,14 @@ export interface Level {
   platforms: Platform[];
   enemies: Enemy[];
   powerUps: PowerUp[];
-  background: 'urban' | 'sunset' | 'coworking';
+  background: BackgroundType;
   width: number;
   goal: { x: number; y: number };
+  hasBoss?: boolean;
+  bossId?: string;
 }
 
-export type GameState = 'menu' | 'character-select' | 'level-select' | 'playing' | 'paused' | 'level-complete' | 'game-over';
+export type GameState = 'menu' | 'character-select' | 'level-select' | 'playing' | 'paused' | 'level-complete' | 'game-over' | 'boss-defeated';
 
 export interface GameProgress {
   unlockedLevels: number[];
