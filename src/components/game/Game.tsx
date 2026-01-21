@@ -36,7 +36,7 @@ const Game: React.FC = () => {
   };
 
   const handleNextLevel = () => {
-    if (currentLevelId < 3) {
+    if (currentLevelId < 6) {
       selectLevel(currentLevelId + 1);
     }
   };
@@ -73,6 +73,7 @@ const Game: React.FC = () => {
           onLevelComplete={handleLevelComplete}
           onGameOver={gameOver}
           onPause={pauseGame}
+          onBossDefeated={() => {}}
         />
       )}
 
@@ -90,7 +91,7 @@ const Game: React.FC = () => {
           levelName={currentLevel.name}
           networkingCollected={networkingCollected.current}
           networkingTotal={currentLevel.powerUps.filter(p => p.type === 'networking').length}
-          hasNextLevel={currentLevelId < 3}
+          hasNextLevel={currentLevelId < 6}
           onNextLevel={handleNextLevel}
           onReplay={restartLevel}
           onLevelSelect={goToLevelSelect}
