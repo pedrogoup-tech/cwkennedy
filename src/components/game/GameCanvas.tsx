@@ -22,6 +22,24 @@ interface GameCanvasProps {
   onBossDefeated?: () => void;
 }
 
+// Animation states for player
+interface PlayerAnimation {
+  state: 'idle' | 'walk' | 'jump' | 'fall' | 'shoot';
+  frame: number;
+  frameTimer: number;
+  shootTimer: number;
+}
+
+// Collect effect for power-ups
+interface CollectEffect {
+  id: string;
+  x: number;
+  y: number;
+  type: 'coffee' | 'wifi' | 'networking';
+  timer: number;
+  particles: Array<{ x: number; y: number; vx: number; vy: number; size: number; alpha: number }>;
+}
+
 const GRAVITY = 0.6;
 const JUMP_FORCE = -14;
 const MOVE_SPEED = 5;
@@ -48,7 +66,7 @@ const getCharacterModifiers = (characterId: CharacterId) => {
   }
 };
 
-// Enhanced background drawing with parallax
+// Enhanced pixel art background drawing with parallax
 const drawBackground = (
   ctx: CanvasRenderingContext2D,
   background: BackgroundType,
@@ -61,20 +79,20 @@ const drawBackground = (
   
   switch (background) {
     case 'urban':
-      bgGradient.addColorStop(0, '#4FC3F7');
-      bgGradient.addColorStop(0.5, '#81D4FA');
-      bgGradient.addColorStop(1, '#B3E5FC');
+      bgGradient.addColorStop(0, '#87CEEB');
+      bgGradient.addColorStop(0.5, '#B0E2FF');
+      bgGradient.addColorStop(1, '#E0F4FF');
       break;
     case 'sunset':
       bgGradient.addColorStop(0, '#FF6B35');
-      bgGradient.addColorStop(0.3, '#F7931E');
+      bgGradient.addColorStop(0.3, '#FF8C42');
       bgGradient.addColorStop(0.6, '#FF5E78');
       bgGradient.addColorStop(1, '#9C27B0');
       break;
     case 'coworking':
-      bgGradient.addColorStop(0, '#FAFAFA');
-      bgGradient.addColorStop(0.5, '#F5F5F5');
-      bgGradient.addColorStop(1, '#EEEEEE');
+      bgGradient.addColorStop(0, '#F5F5F5');
+      bgGradient.addColorStop(0.5, '#EEEEEE');
+      bgGradient.addColorStop(1, '#E0E0E0');
       break;
     case 'meeting':
       bgGradient.addColorStop(0, '#E3F2FD');
@@ -82,402 +100,333 @@ const drawBackground = (
       bgGradient.addColorStop(1, '#90CAF9');
       break;
     case 'rooftop':
-      bgGradient.addColorStop(0, '#1A237E');
-      bgGradient.addColorStop(0.4, '#303F9F');
-      bgGradient.addColorStop(0.7, '#5C6BC0');
-      bgGradient.addColorStop(1, '#7986CB');
+      bgGradient.addColorStop(0, '#0D1B2A');
+      bgGradient.addColorStop(0.4, '#1B263B');
+      bgGradient.addColorStop(0.7, '#415A77');
+      bgGradient.addColorStop(1, '#778DA9');
       break;
     case 'happyhour':
-      bgGradient.addColorStop(0, '#4A148C');
-      bgGradient.addColorStop(0.3, '#7B1FA2');
-      bgGradient.addColorStop(0.6, '#9C27B0');
-      bgGradient.addColorStop(1, '#E040FB');
+      bgGradient.addColorStop(0, '#2D1B69');
+      bgGradient.addColorStop(0.3, '#5B2C6F');
+      bgGradient.addColorStop(0.6, '#8E44AD');
+      bgGradient.addColorStop(1, '#D35400');
       break;
   }
   ctx.fillStyle = bgGradient;
   ctx.fillRect(0, 0, canvasWidth, canvasHeight);
   
-  // Draw stars for night scenes
+  // Draw pixel art stars for night scenes
   if (background === 'rooftop' || background === 'happyhour') {
     ctx.fillStyle = '#FFFFFF';
-    for (let i = 0; i < 50; i++) {
-      const starX = (i * 47 + Math.sin(gameTime * 0.01 + i) * 2) % canvasWidth;
+    for (let i = 0; i < 60; i++) {
+      const starX = ((i * 47 + cameraX * 0.05) % (canvasWidth + 100)) - 50;
       const starY = (i * 23) % (canvasHeight * 0.5);
-      const starSize = (Math.sin(gameTime * 0.05 + i) + 1) * 1.5 + 0.5;
-      ctx.globalAlpha = 0.5 + Math.sin(gameTime * 0.03 + i * 0.5) * 0.3;
-      ctx.beginPath();
-      ctx.arc(starX, starY, starSize, 0, Math.PI * 2);
-      ctx.fill();
+      const twinkle = Math.sin(gameTime * 0.1 + i) > 0.3;
+      if (twinkle) {
+        ctx.globalAlpha = 0.6 + Math.sin(gameTime * 0.05 + i * 0.5) * 0.4;
+        // Pixel art star
+        ctx.fillRect(Math.floor(starX), Math.floor(starY), 2, 2);
+        ctx.fillRect(Math.floor(starX) - 1, Math.floor(starY) + 1, 1, 1);
+        ctx.fillRect(Math.floor(starX) + 2, Math.floor(starY) + 1, 1, 1);
+      }
     }
     ctx.globalAlpha = 1;
   }
   
-  // Draw clouds for day scenes with parallax
+  // Draw pixel art clouds for day scenes with parallax
   if (background === 'urban' || background === 'sunset') {
-    ctx.fillStyle = background === 'sunset' ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.7)';
-    for (let i = 0; i < 8; i++) {
-      const cloudX = ((i * 150 - cameraX * 0.1) % (canvasWidth + 200)) - 100;
-      const cloudY = 30 + (i % 3) * 40;
-      const cloudWidth = 80 + (i % 4) * 30;
+    for (let i = 0; i < 6; i++) {
+      const cloudX = ((i * 200 - cameraX * 0.08) % (canvasWidth + 300)) - 100;
+      const cloudY = 30 + (i % 3) * 50;
       
-      ctx.beginPath();
-      ctx.arc(cloudX, cloudY, 25, 0, Math.PI * 2);
-      ctx.arc(cloudX + 30, cloudY - 10, 20, 0, Math.PI * 2);
-      ctx.arc(cloudX + 60, cloudY, 25, 0, Math.PI * 2);
-      ctx.arc(cloudX + 30, cloudY + 5, 18, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fillStyle = background === 'sunset' ? 'rgba(255, 200, 150, 0.6)' : 'rgba(255, 255, 255, 0.9)';
+      
+      // Pixel art cloud shape
+      const cloudWidth = 60 + (i % 3) * 20;
+      ctx.fillRect(Math.floor(cloudX), Math.floor(cloudY) + 8, cloudWidth, 16);
+      ctx.fillRect(Math.floor(cloudX) + 8, Math.floor(cloudY), cloudWidth - 16, 8);
+      ctx.fillRect(Math.floor(cloudX) + 16, Math.floor(cloudY) + 24, cloudWidth - 32, 8);
     }
   }
   
-  // Draw far background buildings with parallax
+  // Draw pixel art buildings with parallax layers
   if (background === 'urban' || background === 'sunset' || background === 'rooftop') {
-    // Far layer
-    ctx.fillStyle = background === 'rooftop' ? '#1A237E' : '#546E7A';
-    for (let i = 0; i < 12; i++) {
-      const bx = (i * 150 - cameraX * 0.15) % (canvasWidth + 300) - 150;
-      const bh = 80 + Math.sin(i * 1.5) * 40;
-      ctx.fillRect(bx, canvasHeight - 80 - bh, 60, bh);
+    // Far layer (darkest)
+    const farColor = background === 'rooftop' ? '#1B263B' : background === 'sunset' ? '#4A3728' : '#64748B';
+    ctx.fillStyle = farColor;
+    for (let i = 0; i < 15; i++) {
+      const bx = Math.floor((i * 120 - cameraX * 0.1) % (canvasWidth + 360) - 180);
+      const bh = 60 + (i % 4) * 30;
+      ctx.fillRect(bx, canvasHeight - 80 - bh, 50, bh);
     }
     
     // Mid layer
-    ctx.fillStyle = background === 'rooftop' ? '#283593' : '#455A64';
-    for (let i = 0; i < 10; i++) {
-      const bx = (i * 180 - cameraX * 0.25) % (canvasWidth + 360) - 180;
-      const bh = 100 + Math.sin(i * 2) * 50;
-      ctx.fillRect(bx, canvasHeight - 80 - bh, 80, bh);
+    const midColor = background === 'rooftop' ? '#415A77' : background === 'sunset' ? '#5D4037' : '#475569';
+    ctx.fillStyle = midColor;
+    for (let i = 0; i < 12; i++) {
+      const bx = Math.floor((i * 150 - cameraX * 0.2) % (canvasWidth + 400) - 200);
+      const bh = 80 + (i % 5) * 40;
+      ctx.fillRect(bx, canvasHeight - 80 - bh, 70, bh);
       
-      // Windows with glow effect
-      if (background === 'rooftop' || background === 'sunset') {
-        ctx.fillStyle = '#FFEB3B';
-        ctx.globalAlpha = 0.8;
-      } else {
-        ctx.fillStyle = '#FFF59D';
-        ctx.globalAlpha = 1;
-      }
-      for (let wy = 15; wy < bh - 20; wy += 25) {
-        for (let wx = 10; wx < 70; wx += 20) {
+      // Pixel windows
+      ctx.fillStyle = background === 'rooftop' ? '#FCD34D' : '#FEF3C7';
+      for (let wy = 15; wy < bh - 20; wy += 20) {
+        for (let wx = 10; wx < 60; wx += 18) {
           if ((i + wx + wy) % 3 !== 0) {
-            ctx.fillRect(bx + wx, canvasHeight - 80 - bh + wy, 10, 15);
+            ctx.fillRect(bx + wx, canvasHeight - 80 - bh + wy, 8, 10);
           }
         }
       }
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = background === 'rooftop' ? '#283593' : '#455A64';
+      ctx.fillStyle = midColor;
     }
     
-    // Near layer
-    ctx.fillStyle = background === 'rooftop' ? '#3949AB' : '#37474F';
+    // Near layer (closest)
+    const nearColor = background === 'rooftop' ? '#778DA9' : background === 'sunset' ? '#6D4C41' : '#334155';
+    ctx.fillStyle = nearColor;
     for (let i = 0; i < 8; i++) {
-      const bx = (i * 220 - cameraX * 0.35) % (canvasWidth + 440) - 220;
-      const bh = 120 + Math.sin(i * 2.5) * 60;
-      ctx.fillRect(bx, canvasHeight - 80 - bh, 100, bh);
+      const bx = Math.floor((i * 200 - cameraX * 0.35) % (canvasWidth + 500) - 250);
+      const bh = 100 + (i % 4) * 50;
+      ctx.fillRect(bx, canvasHeight - 80 - bh, 90, bh);
       
-      // Detailed windows
-      ctx.fillStyle = background === 'rooftop' ? '#FFCA28' : '#FFF176';
-      for (let wy = 20; wy < bh - 30; wy += 30) {
-        for (let wx = 15; wx < 85; wx += 25) {
+      // Detailed pixel windows with glow
+      ctx.fillStyle = '#FBBF24';
+      ctx.shadowColor = '#FCD34D';
+      ctx.shadowBlur = 4;
+      for (let wy = 20; wy < bh - 25; wy += 25) {
+        for (let wx = 15; wx < 75; wx += 20) {
           if ((i + wx) % 2 === 0) {
-            ctx.fillRect(bx + wx, canvasHeight - 80 - bh + wy, 15, 20);
+            ctx.fillRect(bx + wx, canvasHeight - 80 - bh + wy, 10, 14);
           }
         }
       }
-      ctx.fillStyle = background === 'rooftop' ? '#3949AB' : '#37474F';
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = nearColor;
     }
   }
   
-  // Indoor backgrounds decorations
+  // Indoor scene decorations
   if (background === 'coworking' || background === 'meeting') {
-    // Wall pattern
-    ctx.strokeStyle = '#E0E0E0';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < canvasWidth; i += 100) {
+    // Wall panels
+    ctx.strokeStyle = '#D1D5DB';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < canvasWidth; i += 80) {
+      const lineX = Math.floor(i - (cameraX * 0.1) % 80);
       ctx.beginPath();
-      ctx.moveTo(i - cameraX * 0.1 % 100, 0);
-      ctx.lineTo(i - cameraX * 0.1 % 100, canvasHeight - 100);
+      ctx.moveTo(lineX, 0);
+      ctx.lineTo(lineX, canvasHeight - 100);
       ctx.stroke();
     }
     
-    // Window light effects
-    ctx.fillStyle = 'rgba(255, 235, 59, 0.1)';
-    for (let i = 0; i < 3; i++) {
-      const lightX = 100 + i * 300 - cameraX * 0.05;
-      ctx.beginPath();
-      ctx.moveTo(lightX, 0);
-      ctx.lineTo(lightX + 150, canvasHeight - 100);
-      ctx.lineTo(lightX + 50, canvasHeight - 100);
-      ctx.lineTo(lightX - 50, 0);
-      ctx.fill();
-    }
-    
-    // Plants decoration
-    const plantPositions = [50, 350, 650];
-    ctx.fillStyle = '#4CAF50';
+    // Pixel art plants
+    const plantPositions = [100, 400, 700];
     plantPositions.forEach((px, i) => {
-      const plantX = (px - cameraX * 0.3) % (canvasWidth + 200);
+      const plantX = Math.floor((px - cameraX * 0.2) % (canvasWidth + 200));
+      
       // Pot
+      ctx.fillStyle = '#A1887F';
+      ctx.fillRect(plantX - 12, canvasHeight - 125, 24, 40);
       ctx.fillStyle = '#8D6E63';
-      ctx.fillRect(plantX - 15, canvasHeight - 130, 30, 50);
-      // Leaves
+      ctx.fillRect(plantX - 15, canvasHeight - 130, 30, 8);
+      
+      // Leaves (pixel art style)
       ctx.fillStyle = '#4CAF50';
-      ctx.beginPath();
-      ctx.arc(plantX, canvasHeight - 150, 25 + Math.sin(gameTime * 0.05 + i) * 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(plantX - 15, canvasHeight - 160, 18, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(plantX + 15, canvasHeight - 165, 20, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fillRect(plantX - 20, canvasHeight - 160, 8, 30);
+      ctx.fillRect(plantX + 12, canvasHeight - 155, 8, 25);
+      ctx.fillRect(plantX - 4, canvasHeight - 170, 8, 40);
+      ctx.fillStyle = '#66BB6A';
+      ctx.fillRect(plantX - 8, canvasHeight - 165, 8, 35);
+      ctx.fillRect(plantX + 4, canvasHeight - 160, 8, 30);
     });
   }
   
-  // Happy hour special effects
+  // Happy hour disco effects
   if (background === 'happyhour') {
-    // Disco ball effect
-    const discoX = (canvasWidth / 2 + Math.sin(gameTime * 0.02) * 50);
-    const discoY = 80;
+    const discoX = canvasWidth / 2;
+    const discoY = 60;
     
     // Disco rays
-    ctx.globalAlpha = 0.3;
-    for (let i = 0; i < 12; i++) {
-      const angle = (gameTime * 0.02 + i * Math.PI / 6);
-      const rayLength = 200 + Math.sin(gameTime * 0.05 + i) * 50;
+    ctx.globalAlpha = 0.2;
+    const colors = ['#FF1744', '#FFEA00', '#00E676', '#2979FF', '#D500F9', '#FF9100'];
+    for (let i = 0; i < 8; i++) {
+      const angle = (gameTime * 0.03 + i * Math.PI / 4);
+      const rayLength = 180;
       
-      const gradient = ctx.createLinearGradient(
-        discoX, discoY,
-        discoX + Math.cos(angle) * rayLength,
-        discoY + Math.sin(angle) * rayLength
-      );
-      
-      const colors = ['#FF1744', '#FFEA00', '#00E676', '#2979FF', '#D500F9', '#FF9100'];
-      gradient.addColorStop(0, colors[i % colors.length]);
-      gradient.addColorStop(1, 'transparent');
-      
-      ctx.fillStyle = gradient;
+      ctx.fillStyle = colors[i % colors.length];
       ctx.beginPath();
       ctx.moveTo(discoX, discoY);
       ctx.lineTo(
-        discoX + Math.cos(angle - 0.1) * rayLength,
-        discoY + Math.sin(angle - 0.1) * rayLength
+        discoX + Math.cos(angle - 0.15) * rayLength,
+        discoY + Math.sin(angle - 0.15) * rayLength
       );
       ctx.lineTo(
-        discoX + Math.cos(angle + 0.1) * rayLength,
-        discoY + Math.sin(angle + 0.1) * rayLength
+        discoX + Math.cos(angle + 0.15) * rayLength,
+        discoY + Math.sin(angle + 0.15) * rayLength
       );
       ctx.fill();
     }
     ctx.globalAlpha = 1;
     
-    // Disco ball
+    // Disco ball (pixel art)
     ctx.fillStyle = '#E0E0E0';
-    ctx.beginPath();
-    ctx.arc(discoX, discoY, 25, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Disco ball sparkles
+    ctx.fillRect(discoX - 15, discoY - 15, 30, 30);
+    ctx.fillStyle = '#BDBDBD';
+    ctx.fillRect(discoX - 12, discoY - 12, 8, 8);
+    ctx.fillRect(discoX + 4, discoY - 12, 8, 8);
+    ctx.fillRect(discoX - 12, discoY + 4, 8, 8);
+    ctx.fillRect(discoX + 4, discoY + 4, 8, 8);
     ctx.fillStyle = '#FFFFFF';
-    for (let i = 0; i < 8; i++) {
-      const sparkleAngle = gameTime * 0.1 + i * Math.PI / 4;
-      const sparkleX = discoX + Math.cos(sparkleAngle) * 15;
-      const sparkleY = discoY + Math.sin(sparkleAngle) * 15;
-      ctx.beginPath();
-      ctx.arc(sparkleX, sparkleY, 3, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    ctx.fillRect(discoX - 4, discoY - 4, 8, 8);
     
-    // String to ceiling
-    ctx.strokeStyle = '#BDBDBD';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(discoX, discoY - 25);
-    ctx.lineTo(discoX, 0);
-    ctx.stroke();
+    // String
+    ctx.fillStyle = '#9E9E9E';
+    ctx.fillRect(discoX - 1, 0, 2, discoY - 15);
   }
 };
 
-// Draw enhanced platform
+// Draw pixel art platform
 const drawPlatform = (
   ctx: CanvasRenderingContext2D,
   platform: { x: number; y: number; width: number; height: number; type: string },
   platX: number,
   gameTime: number
 ) => {
+  const px = Math.floor(platX);
+  const py = Math.floor(platform.y);
+  
   switch (platform.type) {
     case 'ground':
-      // Rich ground with layers
-      const groundGradient = ctx.createLinearGradient(platX, platform.y, platX, platform.y + platform.height);
-      groundGradient.addColorStop(0, '#66BB6A');
-      groundGradient.addColorStop(0.15, '#4CAF50');
-      groundGradient.addColorStop(0.2, '#8D6E63');
-      groundGradient.addColorStop(0.5, '#795548');
-      groundGradient.addColorStop(1, '#5D4037');
-      ctx.fillStyle = groundGradient;
-      ctx.fillRect(platX, platform.y, platform.width, platform.height);
-      
+      // Pixel art grass ground
+      ctx.fillStyle = '#4CAF50';
+      ctx.fillRect(px, py, platform.width, 8);
+      ctx.fillStyle = '#388E3C';
+      ctx.fillRect(px, py + 8, platform.width, 8);
+      ctx.fillStyle = '#8D6E63';
+      ctx.fillRect(px, py + 16, platform.width, platform.height - 16);
+      ctx.fillStyle = '#795548';
+      // Dirt texture
+      for (let dx = 0; dx < platform.width; dx += 16) {
+        for (let dy = 20; dy < platform.height; dy += 12) {
+          if ((dx + dy) % 24 === 0) {
+            ctx.fillRect(px + dx + 4, py + dy, 6, 4);
+          }
+        }
+      }
       // Grass tufts
-      ctx.fillStyle = '#81C784';
-      for (let gx = 0; gx < platform.width; gx += 15) {
-        const grassHeight = 8 + Math.sin(gx * 0.3 + gameTime * 0.05) * 3;
-        ctx.beginPath();
-        ctx.moveTo(platX + gx, platform.y);
-        ctx.lineTo(platX + gx + 4, platform.y - grassHeight);
-        ctx.lineTo(platX + gx + 8, platform.y);
-        ctx.fill();
+      ctx.fillStyle = '#66BB6A';
+      for (let gx = 8; gx < platform.width; gx += 20) {
+        ctx.fillRect(px + gx, py - 4, 4, 6);
+        ctx.fillRect(px + gx + 6, py - 2, 3, 4);
       }
       break;
       
     case 'platform':
-      // Wooden platform with texture
-      const woodGradient = ctx.createLinearGradient(platX, platform.y, platX, platform.y + platform.height);
-      woodGradient.addColorStop(0, '#A1887F');
-      woodGradient.addColorStop(0.3, '#8D6E63');
-      woodGradient.addColorStop(1, '#6D4C41');
-      ctx.fillStyle = woodGradient;
-      ctx.fillRect(platX, platform.y, platform.width, platform.height);
-      
-      // Wood grain
-      ctx.strokeStyle = '#5D4037';
-      ctx.lineWidth = 1;
-      for (let i = 0; i < platform.width; i += 30) {
-        ctx.beginPath();
-        ctx.moveTo(platX + i, platform.y);
-        ctx.lineTo(platX + i, platform.y + platform.height);
-        ctx.stroke();
+      // Pixel art wooden platform
+      ctx.fillStyle = '#A1887F';
+      ctx.fillRect(px, py, platform.width, 4);
+      ctx.fillStyle = '#8D6E63';
+      ctx.fillRect(px, py + 4, platform.width, platform.height - 8);
+      ctx.fillStyle = '#6D4C41';
+      ctx.fillRect(px, py + platform.height - 4, platform.width, 4);
+      // Wood grain lines
+      ctx.fillStyle = '#795548';
+      for (let i = 0; i < platform.width; i += 24) {
+        ctx.fillRect(px + i, py, 2, platform.height);
       }
-      
-      // Highlight
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-      ctx.fillRect(platX, platform.y, platform.width, 4);
       break;
       
     case 'moving':
-      // Metallic moving platform
-      const metalGradient = ctx.createLinearGradient(platX, platform.y, platX, platform.y + platform.height);
-      metalGradient.addColorStop(0, '#90A4AE');
-      metalGradient.addColorStop(0.3, '#78909C');
-      metalGradient.addColorStop(1, '#546E7A');
-      ctx.fillStyle = metalGradient;
-      ctx.fillRect(platX, platform.y, platform.width, platform.height);
-      
-      // Glow effect
-      ctx.shadowColor = '#64B5F6';
-      ctx.shadowBlur = 10;
-      ctx.fillStyle = '#64B5F6';
-      ctx.fillRect(platX, platform.y + platform.height - 3, platform.width, 3);
-      ctx.shadowBlur = 0;
-      
-      // Arrows indicating movement
+      // Pixel art metallic moving platform
+      ctx.fillStyle = '#90A4AE';
+      ctx.fillRect(px, py, platform.width, platform.height);
       ctx.fillStyle = '#B0BEC5';
-      const arrowY = platform.y + platform.height / 2;
-      ctx.beginPath();
-      ctx.moveTo(platX + 10, arrowY);
-      ctx.lineTo(platX + 20, arrowY - 5);
-      ctx.lineTo(platX + 20, arrowY + 5);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(platX + platform.width - 10, arrowY);
-      ctx.lineTo(platX + platform.width - 20, arrowY - 5);
-      ctx.lineTo(platX + platform.width - 20, arrowY + 5);
-      ctx.fill();
-      break;
-      
-    case 'building':
-      // Modern building
-      const buildingGradient = ctx.createLinearGradient(platX, platform.y, platX + platform.width, platform.y);
-      buildingGradient.addColorStop(0, '#37474F');
-      buildingGradient.addColorStop(0.5, '#455A64');
-      buildingGradient.addColorStop(1, '#37474F');
-      ctx.fillStyle = buildingGradient;
-      ctx.fillRect(platX, platform.y, platform.width, platform.height);
-      
-      // Door
-      ctx.fillStyle = '#FF9800';
-      ctx.fillRect(platX + platform.width / 2 - 30, platform.y + platform.height - 90, 60, 90);
-      ctx.fillStyle = '#FFB74D';
-      ctx.fillRect(platX + platform.width / 2 - 25, platform.y + platform.height - 85, 50, 80);
-      
-      // Windows
-      ctx.fillStyle = '#FFF59D';
-      ctx.shadowColor = '#FFEB3B';
-      ctx.shadowBlur = 5;
-      for (let wy = 25; wy < platform.height - 100; wy += 45) {
-        for (let wx = 25; wx < platform.width - 40; wx += 55) {
-          ctx.fillRect(platX + wx, platform.y + wy, 35, 30);
-        }
-      }
-      ctx.shadowBlur = 0;
+      ctx.fillRect(px, py, platform.width, 4);
+      ctx.fillStyle = '#607D8B';
+      ctx.fillRect(px, py + platform.height - 4, platform.width, 4);
+      // Glowing edge
+      ctx.fillStyle = '#4FC3F7';
+      ctx.fillRect(px, py + platform.height - 2, platform.width, 2);
+      // Direction arrows
+      ctx.fillStyle = '#CFD8DC';
+      ctx.fillRect(px + 8, py + platform.height / 2 - 2, 8, 4);
+      ctx.fillRect(px + platform.width - 16, py + platform.height / 2 - 2, 8, 4);
       break;
       
     case 'desk':
-      // Office desk
-      const deskGradient = ctx.createLinearGradient(platX, platform.y, platX, platform.y + platform.height);
-      deskGradient.addColorStop(0, '#8D6E63');
-      deskGradient.addColorStop(0.1, '#6D4C41');
-      deskGradient.addColorStop(1, '#5D4037');
-      ctx.fillStyle = deskGradient;
-      ctx.fillRect(platX, platform.y, platform.width, platform.height);
-      
-      // Desk surface shine
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-      ctx.fillRect(platX + 5, platform.y + 5, platform.width - 10, 8);
-      
+      // Pixel art office desk
+      ctx.fillStyle = '#6D4C41';
+      ctx.fillRect(px, py, platform.width, 8);
+      ctx.fillStyle = '#5D4037';
+      ctx.fillRect(px, py + 8, platform.width, platform.height - 8);
       // Desk legs
       ctx.fillStyle = '#4E342E';
-      ctx.fillRect(platX + 10, platform.y + platform.height - 20, 15, 20);
-      ctx.fillRect(platX + platform.width - 25, platform.y + platform.height - 20, 15, 20);
-      
+      ctx.fillRect(px + 8, py + platform.height, 12, 20);
+      ctx.fillRect(px + platform.width - 20, py + platform.height, 12, 20);
       // Computer monitor
-      if (platform.width > 100) {
-        ctx.fillStyle = '#424242';
-        ctx.fillRect(platX + platform.width / 2 - 20, platform.y - 35, 40, 30);
-        ctx.fillStyle = '#64B5F6';
-        ctx.fillRect(platX + platform.width / 2 - 17, platform.y - 32, 34, 24);
-        ctx.fillStyle = '#424242';
-        ctx.fillRect(platX + platform.width / 2 - 5, platform.y - 5, 10, 10);
+      if (platform.width > 80) {
+        ctx.fillStyle = '#37474F';
+        ctx.fillRect(px + platform.width / 2 - 16, py - 28, 32, 24);
+        ctx.fillStyle = '#4FC3F7';
+        ctx.fillRect(px + platform.width / 2 - 13, py - 25, 26, 18);
+        ctx.fillStyle = '#37474F';
+        ctx.fillRect(px + platform.width / 2 - 4, py - 4, 8, 8);
       }
       break;
       
     case 'glass':
-      // Glass platform
-      ctx.fillStyle = 'rgba(144, 202, 249, 0.5)';
-      ctx.fillRect(platX, platform.y, platform.width, platform.height);
-      
-      // Shine effect
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-      ctx.fillRect(platX + 5, platform.y + 2, platform.width * 0.6, platform.height / 3);
-      
-      // Border
-      ctx.strokeStyle = 'rgba(33, 150, 243, 0.7)';
+      // Pixel art glass platform
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = '#81D4FA';
+      ctx.fillRect(px, py, platform.width, platform.height);
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = '#E1F5FE';
+      ctx.fillRect(px + 4, py + 2, platform.width * 0.5, 4);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#29B6F6';
       ctx.lineWidth = 2;
-      ctx.strokeRect(platX, platform.y, platform.width, platform.height);
+      ctx.strokeRect(px, py, platform.width, platform.height);
       break;
       
     case 'rooftop':
-      // Rooftop with industrial look
-      const roofGradient = ctx.createLinearGradient(platX, platform.y, platX, platform.y + platform.height);
-      roofGradient.addColorStop(0, '#616161');
-      roofGradient.addColorStop(0.1, '#757575');
-      roofGradient.addColorStop(0.15, '#546E7A');
-      roofGradient.addColorStop(1, '#37474F');
-      ctx.fillStyle = roofGradient;
-      ctx.fillRect(platX, platform.y, platform.width, platform.height);
-      
-      // Rooftop edge
+      // Pixel art rooftop
       ctx.fillStyle = '#78909C';
-      ctx.fillRect(platX, platform.y, platform.width, 8);
-      
-      // Air conditioning units
-      if (platform.width > 200) {
-        for (let i = 0; i < Math.floor(platform.width / 150); i++) {
-          const acX = platX + 50 + i * 150;
-          ctx.fillStyle = '#90A4AE';
-          ctx.fillRect(acX, platform.y - 25, 40, 25);
-          ctx.fillStyle = '#78909C';
-          for (let line = 0; line < 4; line++) {
-            ctx.fillRect(acX + 5, platform.y - 20 + line * 6, 30, 2);
-          }
+      ctx.fillRect(px, py, platform.width, 6);
+      ctx.fillStyle = '#546E7A';
+      ctx.fillRect(px, py + 6, platform.width, platform.height - 6);
+      // Edge detail
+      ctx.fillStyle = '#90A4AE';
+      ctx.fillRect(px, py, platform.width, 3);
+      // AC units
+      if (platform.width > 150) {
+        for (let i = 0; i < Math.floor(platform.width / 120); i++) {
+          const acX = px + 40 + i * 120;
+          ctx.fillStyle = '#BDBDBD';
+          ctx.fillRect(acX, py - 20, 32, 20);
+          ctx.fillStyle = '#9E9E9E';
+          ctx.fillRect(acX + 4, py - 16, 24, 3);
+          ctx.fillRect(acX + 4, py - 10, 24, 3);
         }
       }
+      break;
+      
+    case 'building':
+      // Pixel art building
+      ctx.fillStyle = '#455A64';
+      ctx.fillRect(px, py, platform.width, platform.height);
+      ctx.fillStyle = '#37474F';
+      ctx.fillRect(px, py, 4, platform.height);
+      ctx.fillRect(px + platform.width - 4, py, 4, platform.height);
+      // Windows
+      ctx.fillStyle = '#FFF59D';
+      for (let wy = 20; wy < platform.height - 80; wy += 35) {
+        for (let wx = 20; wx < platform.width - 30; wx += 45) {
+          ctx.fillRect(px + wx, py + wy, 25, 20);
+        }
+      }
+      // Door
+      ctx.fillStyle = '#FF9800';
+      ctx.fillRect(px + platform.width / 2 - 25, py + platform.height - 70, 50, 70);
+      ctx.fillStyle = '#FFB74D';
+      ctx.fillRect(px + platform.width / 2 - 20, py + platform.height - 65, 40, 60);
       break;
   }
 };
@@ -496,6 +445,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
   
   const character = characters.find(c => c.id === characterId)!;
   const modifiers = getCharacterModifiers(characterId);
+
+  // Animation state
+  const [playerAnim, setPlayerAnim] = useState<PlayerAnimation>({
+    state: 'idle',
+    frame: 0,
+    frameTimer: 0,
+    shootTimer: 0,
+  });
+
+  // Collect effects
+  const [collectEffects, setCollectEffects] = useState<CollectEffect[]>([]);
 
   // Load images
   const [images, setImages] = useState<{
@@ -616,6 +576,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     setCameraX(0);
     setGameTime(0);
     setBossDefeated(false);
+    setCollectEffects([]);
+    setPlayerAnim({ state: 'idle', frame: 0, frameTimer: 0, shootTimer: 0 });
   }, [level, modifiers.startsWithWifi, modifiers.canDoubleJump]);
 
   // Input handling
@@ -656,6 +618,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
       if (e.code === 'KeyJ') {
         setPlayer(prev => {
           if (prev.hasWifi) {
+            setPlayerAnim(anim => ({ ...anim, shootTimer: 15 }));
             const newProjectile: Projectile = {
               id: `proj-${Date.now()}`,
               x: prev.x + (prev.facingRight ? prev.width : 0),
@@ -692,10 +655,81 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
   }, []);
 
+  // Create collect effect
+  const createCollectEffect = useCallback((x: number, y: number, type: 'coffee' | 'wifi' | 'networking') => {
+    const particles = [];
+    const particleCount = 12;
+    for (let i = 0; i < particleCount; i++) {
+      const angle = (i / particleCount) * Math.PI * 2;
+      particles.push({
+        x: 0,
+        y: 0,
+        vx: Math.cos(angle) * (3 + Math.random() * 2),
+        vy: Math.sin(angle) * (3 + Math.random() * 2),
+        size: 4 + Math.random() * 4,
+        alpha: 1,
+      });
+    }
+    
+    setCollectEffects(prev => [...prev, {
+      id: `effect-${Date.now()}-${Math.random()}`,
+      x,
+      y,
+      type,
+      timer: 30,
+      particles,
+    }]);
+  }, []);
+
   // Game loop
   useEffect(() => {
     const gameLoop = () => {
       setGameTime(prev => prev + 1);
+
+      // Update player animation
+      setPlayerAnim(prev => {
+        let newState: PlayerAnimation['state'] = 'idle';
+        
+        if (prev.shootTimer > 0) {
+          newState = 'shoot';
+        } else if (!player.isGrounded) {
+          newState = player.velocityY < 0 ? 'jump' : 'fall';
+        } else if (player.velocityX !== 0) {
+          newState = 'walk';
+        }
+        
+        let newFrame = prev.frame;
+        let newFrameTimer = prev.frameTimer + 1;
+        
+        if (newFrameTimer >= 8) {
+          newFrameTimer = 0;
+          newFrame = (prev.frame + 1) % 4;
+        }
+        
+        return {
+          state: newState,
+          frame: newFrame,
+          frameTimer: newFrameTimer,
+          shootTimer: Math.max(0, prev.shootTimer - 1),
+        };
+      });
+
+      // Update collect effects
+      setCollectEffects(prev => {
+        return prev
+          .map(effect => ({
+            ...effect,
+            timer: effect.timer - 1,
+            particles: effect.particles.map(p => ({
+              ...p,
+              x: p.x + p.vx,
+              y: p.y + p.vy,
+              vy: p.vy + 0.2,
+              alpha: p.alpha - 0.03,
+            })),
+          }))
+          .filter(effect => effect.timer > 0);
+      });
 
       setPlayer(prevPlayer => {
         let newPlayer = { ...prevPlayer };
@@ -859,7 +893,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
               if (newPlayer.health !== undefined && newPlayer.health > 0) {
                 newPlayer.health--;
                 newPlayer.invincible = true;
-                newPlayer.invincibleTimer = 90; // 1.5 seconds of invincibility
+                newPlayer.invincibleTimer = 90;
                 
                 // Knockback
                 newPlayer.velocityX = enemy.x > newPlayer.x ? -8 : 8;
@@ -984,6 +1018,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
           );
 
           if (distance < collectRadius + 20) {
+            // Create collect effect
+            createCollectEffect(powerUp.x + 16, powerUp.y + 16, powerUp.type);
+            
             setPlayer(prev => {
               switch (powerUp.type) {
                 case 'coffee':
@@ -1020,7 +1057,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [level, enemies, player, projectiles, bossProjectiles, cameraX, gameTime, checkCollision, onGameOver, onLevelComplete, onBossDefeated, modifiers, bossDefeated]);
+  }, [level, enemies, player, projectiles, bossProjectiles, cameraX, gameTime, checkCollision, onGameOver, onLevelComplete, onBossDefeated, modifiers, bossDefeated, createCollectEffect]);
 
   // Render
   useEffect(() => {
@@ -1029,6 +1066,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    // Enable pixel art rendering
+    ctx.imageSmoothingEnabled = false;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -1051,101 +1091,139 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
       drawPlatform(ctx, platform, platX, gameTime);
     });
 
-    // Draw goal with enhanced graphics
+    // Draw goal with pixel art style
     const boss = enemies.find(e => e.type === 'boss' && e.alive);
     const goalAccessible = !boss || bossDefeated;
     
-    // Goal glow
-    if (goalAccessible) {
-      ctx.shadowColor = '#FFD700';
-      ctx.shadowBlur = 20;
-    }
-    
-    const goalGradient = ctx.createLinearGradient(level.goal.x, level.goal.y, level.goal.x, level.goal.y + 100);
-    goalGradient.addColorStop(0, goalAccessible ? '#FFD700' : '#9E9E9E');
-    goalGradient.addColorStop(1, goalAccessible ? '#FFA000' : '#616161');
-    ctx.fillStyle = goalGradient;
-    ctx.fillRect(level.goal.x, level.goal.y, 60, 100);
-    ctx.shadowBlur = 0;
+    const goalX = Math.floor(level.goal.x);
+    const goalY = Math.floor(level.goal.y);
     
     // Door frame
-    ctx.strokeStyle = goalAccessible ? '#FF6F00' : '#424242';
-    ctx.lineWidth = 4;
-    ctx.strokeRect(level.goal.x + 5, level.goal.y + 5, 50, 90);
+    ctx.fillStyle = goalAccessible ? '#8B4513' : '#4A4A4A';
+    ctx.fillRect(goalX, goalY, 60, 100);
+    
+    // Door
+    ctx.fillStyle = goalAccessible ? '#FFD700' : '#6B6B6B';
+    ctx.fillRect(goalX + 6, goalY + 6, 48, 88);
+    
+    // Door details
+    ctx.fillStyle = goalAccessible ? '#FFA500' : '#5A5A5A';
+    ctx.fillRect(goalX + 10, goalY + 10, 40, 35);
+    ctx.fillRect(goalX + 10, goalY + 55, 40, 35);
     
     // Door handle
-    ctx.fillStyle = goalAccessible ? '#FFEB3B' : '#757575';
-    ctx.beginPath();
-    ctx.arc(level.goal.x + 45, level.goal.y + 55, 5, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillStyle = goalAccessible ? '#CD853F' : '#3A3A3A';
+    ctx.fillRect(goalX + 44, goalY + 50, 6, 12);
     
-    // Locked indicator if boss is alive
+    // Glow effect if accessible
+    if (goalAccessible) {
+      ctx.shadowColor = '#FFD700';
+      ctx.shadowBlur = 15;
+      ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
+      ctx.fillRect(goalX - 5, goalY - 5, 70, 110);
+      ctx.shadowBlur = 0;
+    }
+    
+    // Lock icon if boss alive
     if (!goalAccessible) {
       ctx.fillStyle = '#F44336';
-      ctx.font = 'bold 20px sans-serif';
-      ctx.fillText('🔒', level.goal.x + 18, level.goal.y - 10);
+      ctx.fillRect(goalX + 22, goalY - 20, 16, 12);
+      ctx.fillRect(goalX + 18, goalY - 8, 24, 18);
     }
 
-    // Draw power-ups with sprites and enhanced effects
+    // Draw power-ups with pixel art style and animation
     powerUps.forEach(powerUp => {
       if (powerUp.collected) return;
 
-      const bounceY = Math.sin(gameTime * 0.1 + powerUp.x * 0.01) * 5;
-      const size = 40;
+      const bounceY = Math.sin(gameTime * 0.1 + powerUp.x * 0.01) * 4;
+      const size = 36;
+      const px = Math.floor(powerUp.x);
+      const py = Math.floor(powerUp.y + bounceY);
       
       // Glow effect
-      ctx.shadowColor = powerUp.type === 'coffee' ? '#FF9800' : powerUp.type === 'wifi' ? '#2196F3' : '#4CAF50';
-      ctx.shadowBlur = 15;
+      const glowColor = powerUp.type === 'coffee' ? 'rgba(255, 152, 0, 0.4)' : 
+                       powerUp.type === 'wifi' ? 'rgba(33, 150, 243, 0.4)' : 'rgba(76, 175, 80, 0.4)';
+      ctx.fillStyle = glowColor;
+      ctx.beginPath();
+      ctx.arc(px + size / 2, py + size / 2, size / 2 + 8, 0, Math.PI * 2);
+      ctx.fill();
       
       let sprite: HTMLImageElement | null = null;
       switch (powerUp.type) {
-        case 'coffee':
-          sprite = images.coffee;
-          break;
-        case 'wifi':
-          sprite = images.wifi;
-          break;
-        case 'networking':
-          sprite = images.networking;
-          break;
+        case 'coffee': sprite = images.coffee; break;
+        case 'wifi': sprite = images.wifi; break;
+        case 'networking': sprite = images.networking; break;
       }
 
       if (sprite) {
-        ctx.drawImage(sprite, powerUp.x - 4, powerUp.y + bounceY - 8, size, size);
+        ctx.drawImage(sprite, px, py, size, size);
       }
-      ctx.shadowBlur = 0;
     });
 
-    // Draw enemies with sprites
+    // Draw collect effects
+    collectEffects.forEach(effect => {
+      const effectColor = effect.type === 'coffee' ? '#FF9800' : 
+                         effect.type === 'wifi' ? '#2196F3' : '#4CAF50';
+      
+      effect.particles.forEach(p => {
+        if (p.alpha > 0) {
+          ctx.globalAlpha = p.alpha;
+          ctx.fillStyle = effectColor;
+          ctx.fillRect(
+            Math.floor(effect.x + p.x - p.size / 2),
+            Math.floor(effect.y + p.y - p.size / 2),
+            Math.floor(p.size),
+            Math.floor(p.size)
+          );
+        }
+      });
+      
+      // Ring effect
+      const ringSize = (30 - effect.timer) * 3;
+      ctx.globalAlpha = effect.timer / 30;
+      ctx.strokeStyle = effectColor;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, ringSize, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      // Text popup
+      ctx.globalAlpha = effect.timer / 30;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 14px "Press Start 2P", monospace';
+      ctx.textAlign = 'center';
+      const text = effect.type === 'coffee' ? '+SPEED!' : effect.type === 'wifi' ? '+WIFI!' : '+1';
+      ctx.fillText(text, effect.x, effect.y - 20 - (30 - effect.timer) * 1.5);
+      ctx.textAlign = 'left';
+      
+      ctx.globalAlpha = 1;
+    });
+
+    // Draw enemies with pixel art style
     enemies.forEach(enemy => {
       if (!enemy.alive) return;
       
+      const ex = Math.floor(enemy.x);
+      const ey = Math.floor(enemy.y);
+      
       if (enemy.type === 'boss') {
-        // Boss rendering with health bar
         if (images.boss) {
           ctx.save();
           
           // Boss damage flash
           if (enemy.health !== undefined && enemy.maxHealth !== undefined) {
-            const damageFlash = (enemy.maxHealth - enemy.health) % 2 === 1;
-            if (damageFlash && gameTime % 10 < 5) {
-              ctx.globalAlpha = 0.7;
+            if (gameTime % 10 < 5 && enemy.health < enemy.maxHealth) {
+              ctx.globalAlpha = 0.6;
             }
           }
           
-          // Phase-based color tint
-          if (enemy.phase === 3) {
-            ctx.filter = 'hue-rotate(30deg) saturate(1.5)';
-          } else if (enemy.phase === 2) {
-            ctx.filter = 'saturate(1.2)';
-          }
-          
+          // Direction flip
           if (enemy.velocityX < 0) {
-            ctx.translate(enemy.x + enemy.width, enemy.y);
+            ctx.translate(ex + enemy.width, ey);
             ctx.scale(-1, 1);
             ctx.drawImage(images.boss, 0, 0, enemy.width, enemy.height);
           } else {
-            ctx.drawImage(images.boss, enemy.x, enemy.y, enemy.width, enemy.height);
+            ctx.drawImage(images.boss, ex, ey, enemy.width, enemy.height);
           }
           ctx.restore();
         }
@@ -1155,10 +1233,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
           const healthPercent = enemy.health / enemy.maxHealth;
           const barWidth = 100;
           const barHeight = 10;
-          const barX = enemy.x + (enemy.width - barWidth) / 2;
-          const barY = enemy.y - 25;
+          const barX = ex + (enemy.width - barWidth) / 2;
+          const barY = ey - 30;
           
           // Background
+          ctx.fillStyle = '#1a1a1a';
+          ctx.fillRect(barX - 2, barY - 2, barWidth + 4, barHeight + 4);
           ctx.fillStyle = '#424242';
           ctx.fillRect(barX, barY, barWidth, barHeight);
           
@@ -1174,13 +1254,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
           
           // Boss name
           ctx.fillStyle = '#FFFFFF';
-          ctx.font = 'bold 12px sans-serif';
+          ctx.font = 'bold 10px "Press Start 2P", monospace';
           ctx.textAlign = 'center';
-          ctx.fillText('MICROMANAGER', enemy.x + enemy.width / 2, barY - 5);
+          ctx.fillText('MICROMANAGER', ex + enemy.width / 2, barY - 8);
           ctx.textAlign = 'left';
         }
       } else {
-        // Regular enemies (sloth, deadline, spam)
+        // Regular enemies
         let sprite: HTMLImageElement | null = null;
         switch (enemy.type) {
           case 'sloth': sprite = images.sloth; break;
@@ -1190,12 +1270,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         
         if (sprite) {
           ctx.save();
+          // Direction flip based on velocity
           if (enemy.velocityX > 0) {
-            ctx.translate(enemy.x + enemy.width, enemy.y);
+            ctx.translate(ex + enemy.width, ey);
             ctx.scale(-1, 1);
-            ctx.drawImage(sprite, 0, 0, enemy.width + 10, enemy.height + 10);
+            ctx.drawImage(sprite, -5, -5, enemy.width + 10, enemy.height + 10);
           } else {
-            ctx.drawImage(sprite, enemy.x, enemy.y, enemy.width + 10, enemy.height + 10);
+            ctx.drawImage(sprite, ex - 5, ey - 5, enemy.width + 10, enemy.height + 10);
           }
           ctx.restore();
         }
@@ -1206,113 +1287,173 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     bossProjectiles.forEach(proj => {
       if (!proj.active) return;
       
-      // Red dangerous projectile
-      const gradient = ctx.createRadialGradient(proj.x, proj.y, 0, proj.x, proj.y, 15);
-      gradient.addColorStop(0, '#FFEB3B');
-      gradient.addColorStop(0.3, '#FF5722');
-      gradient.addColorStop(1, 'rgba(244, 67, 54, 0)');
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.arc(proj.x, proj.y, 15, 0, Math.PI * 2);
-      ctx.fill();
+      const px = Math.floor(proj.x);
+      const py = Math.floor(proj.y);
       
+      // Pixel art fireball
+      ctx.fillStyle = '#FF5722';
+      ctx.fillRect(px - 8, py - 8, 16, 16);
       ctx.fillStyle = '#FFEB3B';
-      ctx.beginPath();
-      ctx.arc(proj.x, proj.y, 6, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fillRect(px - 4, py - 4, 8, 8);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(px - 2, py - 2, 4, 4);
     });
 
     // Draw player projectiles
     projectiles.forEach(proj => {
       if (!proj.active) return;
       
-      // Glowing wifi projectile
-      const gradient = ctx.createRadialGradient(proj.x, proj.y, 0, proj.x, proj.y, 12);
-      gradient.addColorStop(0, '#64B5F6');
-      gradient.addColorStop(0.5, '#2196F3');
-      gradient.addColorStop(1, 'rgba(33, 150, 243, 0)');
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.arc(proj.x, proj.y, 12, 0, Math.PI * 2);
-      ctx.fill();
+      const px = Math.floor(proj.x);
+      const py = Math.floor(proj.y);
       
+      // Pixel art wifi projectile
+      ctx.fillStyle = '#2196F3';
+      ctx.fillRect(px - 8, py - 4, 16, 8);
+      ctx.fillStyle = '#64B5F6';
+      ctx.fillRect(px - 6, py - 2, 12, 4);
       ctx.fillStyle = '#BBDEFB';
-      ctx.beginPath();
-      ctx.arc(proj.x, proj.y, 5, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fillRect(px - 2, py - 1, 4, 2);
+      
+      // Trail effect
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = '#2196F3';
+      const trailDir = proj.velocityX > 0 ? -1 : 1;
+      ctx.fillRect(px + trailDir * 10, py - 2, 8, 4);
+      ctx.globalAlpha = 0.3;
+      ctx.fillRect(px + trailDir * 18, py - 1, 6, 2);
+      ctx.globalAlpha = 1;
     });
 
-    // Draw player with sprite
+    // Draw player with sprite and animations
     if (images.character) {
       ctx.save();
       
+      const px = Math.floor(player.x);
+      const py = Math.floor(player.y);
+      
       // Invincibility flashing
-      if (player.invincible && gameTime % 10 < 5) {
-        ctx.globalAlpha = 0.5;
+      if (player.invincible && gameTime % 8 < 4) {
+        ctx.globalAlpha = 0.4;
       }
       
-      // Coffee effect glow
+      // Coffee effect aura
       if (player.hasCoffee) {
-        ctx.globalAlpha = Math.min(ctx.globalAlpha, 0.3 + Math.sin(gameTime * 0.2) * 0.1);
-        const coffeeGlow = ctx.createRadialGradient(
-          player.x + player.width / 2, player.y + player.height / 2, 0,
-          player.x + player.width / 2, player.y + player.height / 2, 50
-        );
-        coffeeGlow.addColorStop(0, '#FF9800');
-        coffeeGlow.addColorStop(1, 'rgba(255, 152, 0, 0)');
-        ctx.fillStyle = coffeeGlow;
+        ctx.fillStyle = 'rgba(255, 152, 0, 0.3)';
+        const pulseSize = 10 + Math.sin(gameTime * 0.2) * 5;
         ctx.beginPath();
-        ctx.arc(player.x + player.width / 2, player.y + player.height / 2, 50, 0, Math.PI * 2);
+        ctx.arc(px + player.width / 2, py + player.height / 2, player.width / 2 + pulseSize, 0, Math.PI * 2);
         ctx.fill();
-        ctx.globalAlpha = player.invincible && gameTime % 10 < 5 ? 0.5 : 1;
+        
+        // Speed lines
+        ctx.strokeStyle = 'rgba(255, 152, 0, 0.5)';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 3; i++) {
+          const lineX = px - 10 - i * 8;
+          const lineY = py + 15 + i * 15;
+          ctx.beginPath();
+          ctx.moveTo(lineX, lineY);
+          ctx.lineTo(lineX - 15, lineY);
+          ctx.stroke();
+        }
       }
 
       // Double jump indicator
       if (player.canDoubleJump && !player.isGrounded && !player.hasDoubleJumped) {
-        ctx.globalAlpha = 0.5 + Math.sin(gameTime * 0.3) * 0.2;
         ctx.fillStyle = '#4CAF50';
-        ctx.beginPath();
-        ctx.arc(player.x + player.width / 2, player.y + player.height + 5, 6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = player.invincible && gameTime % 10 < 5 ? 0.5 : 1;
+        ctx.globalAlpha = 0.5 + Math.sin(gameTime * 0.3) * 0.3;
+        ctx.fillRect(px + player.width / 2 - 6, py + player.height + 4, 12, 4);
+        ctx.globalAlpha = player.invincible && gameTime % 8 < 4 ? 0.4 : 1;
       }
 
-      if (!player.facingRight) {
-        ctx.translate(player.x + player.width, player.y);
-        ctx.scale(-1, 1);
-        ctx.drawImage(images.character, 0, 0, player.width, player.height);
-      } else {
-        ctx.drawImage(images.character, player.x, player.y, player.width, player.height);
+      // Animation squash and stretch
+      let scaleX = 1;
+      let scaleY = 1;
+      let offsetY = 0;
+      
+      if (playerAnim.state === 'jump') {
+        scaleX = 0.9;
+        scaleY = 1.15;
+        offsetY = -5;
+      } else if (playerAnim.state === 'fall') {
+        scaleX = 1.1;
+        scaleY = 0.9;
+        offsetY = 3;
+      } else if (playerAnim.state === 'walk') {
+        // Bobbing animation
+        offsetY = Math.sin(gameTime * 0.4) * 2;
+      } else if (playerAnim.state === 'shoot') {
+        // Recoil
+        const recoil = player.facingRight ? -3 : 3;
+        ctx.translate(recoil, 0);
       }
+
+      // Draw character with direction
+      const drawWidth = player.width * scaleX;
+      const drawHeight = player.height * scaleY;
+      const drawX = px + (player.width - drawWidth) / 2;
+      const drawY = py + (player.height - drawHeight) + offsetY;
+      
+      if (!player.facingRight) {
+        ctx.translate(px + player.width, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(images.character, player.width - drawX - drawWidth, drawY, drawWidth, drawHeight);
+      } else {
+        ctx.drawImage(images.character, drawX, drawY, drawWidth, drawHeight);
+      }
+      
+      // Shoot muzzle flash
+      if (playerAnim.shootTimer > 10) {
+        ctx.fillStyle = '#FFEB3B';
+        const flashX = player.facingRight ? px + player.width + 5 : -15;
+        const flashY = py + player.height / 2 - 4;
+        ctx.fillRect(flashX, flashY, 10, 8);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(flashX + 2, flashY + 2, 6, 4);
+      }
+      
       ctx.restore();
     }
 
     ctx.restore();
     
-    // Draw player health bar (fixed position)
+    // Draw player health bar (fixed position) - pixel art style
     if (player.health !== undefined && player.maxHealth !== undefined) {
       const hearts = player.maxHealth;
-      const heartSize = 24;
-      const startX = canvas.width - hearts * (heartSize + 5) - 15;
+      const heartSize = 20;
+      const startX = canvas.width - hearts * (heartSize + 6) - 15;
       const heartY = 15;
       
       for (let i = 0; i < hearts; i++) {
-        const heartX = startX + i * (heartSize + 5);
+        const heartX = startX + i * (heartSize + 6);
+        
+        // Pixel art heart shape
         if (i < player.health) {
           // Full heart
           ctx.fillStyle = '#F44336';
-          ctx.font = `${heartSize}px sans-serif`;
-          ctx.fillText('❤️', heartX, heartY + heartSize);
+          // Heart shape made of rectangles
+          ctx.fillRect(heartX + 2, heartY, 6, 6);
+          ctx.fillRect(heartX + 12, heartY, 6, 6);
+          ctx.fillRect(heartX, heartY + 4, 20, 8);
+          ctx.fillRect(heartX + 2, heartY + 12, 16, 4);
+          ctx.fillRect(heartX + 4, heartY + 16, 12, 2);
+          ctx.fillRect(heartX + 8, heartY + 18, 4, 2);
+          // Highlight
+          ctx.fillStyle = '#EF9A9A';
+          ctx.fillRect(heartX + 4, heartY + 2, 4, 4);
         } else {
           // Empty heart
-          ctx.fillStyle = '#757575';
-          ctx.font = `${heartSize}px sans-serif`;
-          ctx.fillText('🖤', heartX, heartY + heartSize);
+          ctx.fillStyle = '#424242';
+          ctx.fillRect(heartX + 2, heartY, 6, 6);
+          ctx.fillRect(heartX + 12, heartY, 6, 6);
+          ctx.fillRect(heartX, heartY + 4, 20, 8);
+          ctx.fillRect(heartX + 2, heartY + 12, 16, 4);
+          ctx.fillRect(heartX + 4, heartY + 16, 12, 2);
+          ctx.fillRect(heartX + 8, heartY + 18, 4, 2);
         }
       }
     }
     
-  }, [player, enemies, powerUps, projectiles, bossProjectiles, level, cameraX, gameTime, images, bossDefeated]);
+  }, [player, enemies, powerUps, projectiles, bossProjectiles, level, cameraX, gameTime, images, bossDefeated, playerAnim, collectEffects]);
 
   const networkingTotal = level.powerUps.filter(p => p.type === 'networking').length;
 
@@ -1339,6 +1480,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         width={800}
         height={600}
         className="game-canvas max-w-full max-h-full border-4 border-primary rounded-lg shadow-2xl"
+        style={{ imageRendering: 'pixelated' }}
       />
     </div>
   );
