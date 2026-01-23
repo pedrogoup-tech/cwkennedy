@@ -22,11 +22,8 @@ interface GameCanvasProps {
   onBossDefeated?: () => void;
 }
 
-// Animation states for player
-interface PlayerAnimation {
-  state: 'idle' | 'walk' | 'jump' | 'fall' | 'shoot';
-  frame: number;
-  frameTimer: number;
+// Shoot timer for muzzle flash
+interface ShootState {
   shootTimer: number;
 }
 
@@ -446,11 +443,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
   const character = characters.find(c => c.id === characterId)!;
   const modifiers = getCharacterModifiers(characterId);
 
-  // Animation state
-  const [playerAnim, setPlayerAnim] = useState<PlayerAnimation>({
-    state: 'idle',
-    frame: 0,
-    frameTimer: 0,
+  // Shoot state for muzzle flash
+  const [shootState, setShootState] = useState<ShootState>({
     shootTimer: 0,
   });
 
@@ -577,7 +571,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     setGameTime(0);
     setBossDefeated(false);
     setCollectEffects([]);
-    setPlayerAnim({ state: 'idle', frame: 0, frameTimer: 0, shootTimer: 0 });
+    setShootState({ shootTimer: 0 });
   }, [level, modifiers.startsWithWifi, modifiers.canDoubleJump]);
 
   // Input handling
@@ -618,7 +612,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
       if (e.code === 'KeyJ') {
         setPlayer(prev => {
           if (prev.hasWifi) {
-            setPlayerAnim(anim => ({ ...anim, shootTimer: 15 }));
+            setShootState(state => ({ ...state, shootTimer: 15 }));
             const newProjectile: Projectile = {
               id: `proj-${Date.now()}`,
               x: prev.x + (prev.facingRight ? prev.width : 0),
@@ -686,33 +680,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     const gameLoop = () => {
       setGameTime(prev => prev + 1);
 
-      // Update player animation
-      setPlayerAnim(prev => {
-        let newState: PlayerAnimation['state'] = 'idle';
-        
-        if (prev.shootTimer > 0) {
-          newState = 'shoot';
-        } else if (!player.isGrounded) {
-          newState = player.velocityY < 0 ? 'jump' : 'fall';
-        } else if (player.velocityX !== 0) {
-          newState = 'walk';
-        }
-        
-        let newFrame = prev.frame;
-        let newFrameTimer = prev.frameTimer + 1;
-        
-        if (newFrameTimer >= 8) {
-          newFrameTimer = 0;
-          newFrame = (prev.frame + 1) % 4;
-        }
-        
-        return {
-          state: newState,
-          frame: newFrame,
-          frameTimer: newFrameTimer,
-          shootTimer: Math.max(0, prev.shootTimer - 1),
-        };
-      });
+      // Update shoot timer
+      setShootState(prev => ({
+        shootTimer: Math.max(0, prev.shootTimer - 1),
+      }));
 
       // Update collect effects
       setCollectEffects(prev => {
@@ -1057,7 +1028,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [level, enemies, player, projectiles, bossProjectiles, cameraX, gameTime, checkCollision, onGameOver, onLevelComplete, onBossDefeated, modifiers, bossDefeated, createCollectEffect]);
+  }, [level, enemies, player, projectiles, bossProjectiles, cameraX, gameTime, checkCollision, onGameOver, onLevelComplete, onBossDefeated, modifiers, bossDefeated, createCollectEffect, shootState]);
 
   // Render
   useEffect(() => {
@@ -1365,44 +1336,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         ctx.globalAlpha = player.invincible && gameTime % 8 < 4 ? 0.4 : 1;
       }
 
-      // Animation squash and stretch
-      let scaleX = 1;
-      let scaleY = 1;
-      let offsetY = 0;
-      
-      if (playerAnim.state === 'jump') {
-        scaleX = 0.9;
-        scaleY = 1.15;
-        offsetY = -5;
-      } else if (playerAnim.state === 'fall') {
-        scaleX = 1.1;
-        scaleY = 0.9;
-        offsetY = 3;
-      } else if (playerAnim.state === 'walk') {
-        // Bobbing animation
-        offsetY = Math.sin(gameTime * 0.4) * 2;
-      } else if (playerAnim.state === 'shoot') {
-        // Recoil
-        const recoil = player.facingRight ? -3 : 3;
-        ctx.translate(recoil, 0);
-      }
-
-      // Draw character with direction
-      const drawWidth = player.width * scaleX;
-      const drawHeight = player.height * scaleY;
-      const drawX = px + (player.width - drawWidth) / 2;
-      const drawY = py + (player.height - drawHeight) + offsetY;
-      
+      // Draw character with direction flip
       if (!player.facingRight) {
         ctx.translate(px + player.width, 0);
         ctx.scale(-1, 1);
-        ctx.drawImage(images.character, player.width - drawX - drawWidth, drawY, drawWidth, drawHeight);
+        ctx.drawImage(images.character, 0, py, player.width, player.height);
       } else {
-        ctx.drawImage(images.character, drawX, drawY, drawWidth, drawHeight);
+        ctx.drawImage(images.character, px, py, player.width, player.height);
       }
       
       // Shoot muzzle flash
-      if (playerAnim.shootTimer > 10) {
+      if (shootState.shootTimer > 10) {
         ctx.fillStyle = '#FFEB3B';
         const flashX = player.facingRight ? px + player.width + 5 : -15;
         const flashY = py + player.height / 2 - 4;
@@ -1453,7 +1397,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
       }
     }
     
-  }, [player, enemies, powerUps, projectiles, bossProjectiles, level, cameraX, gameTime, images, bossDefeated, playerAnim, collectEffects]);
+  }, [player, enemies, powerUps, projectiles, bossProjectiles, level, cameraX, gameTime, images, bossDefeated, shootState, collectEffects]);
 
   const networkingTotal = level.powerUps.filter(p => p.type === 'networking').length;
 
