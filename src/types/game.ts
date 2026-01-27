@@ -16,7 +16,7 @@ export interface Character {
   passive: CharacterPassive;
 }
 
-export type PowerUpType = 'coffee' | 'wifi' | 'networking';
+export type PowerUpType = 'coffee' | 'wifi' | 'networking' | 'coin';
 
 export interface PowerUp {
   id: string;
@@ -49,6 +49,11 @@ export interface Enemy {
   isAggro?: boolean;
   stunned?: boolean;
   stunnedTimer?: number;
+  dashCooldown?: number;
+  retreatTimer?: number;
+  predictiveAim?: boolean;
+  burstCount?: number;
+  bossName?: string;
 }
 
 export interface Platform {
@@ -56,7 +61,7 @@ export interface Platform {
   y: number;
   width: number;
   height: number;
-  type: 'ground' | 'platform' | 'moving' | 'building' | 'desk' | 'glass' | 'rooftop';
+  type: 'ground' | 'platform' | 'moving' | 'building' | 'desk' | 'glass' | 'rooftop' | 'arena-wall';
   movingRange?: { min: number; max: number };
   movingSpeed?: number;
 }
@@ -91,9 +96,19 @@ export interface Player {
   maxHealth?: number;
   invincible?: boolean;
   invincibleTimer?: number;
+  coins: number;
+  shootCooldown?: number;
+  isProgrammer?: boolean;
 }
 
-export type BackgroundType = 'urban' | 'sunset' | 'coworking' | 'meeting' | 'rooftop' | 'happyhour';
+export type BackgroundType = 'urban' | 'sunset' | 'coworking' | 'meeting' | 'rooftop' | 'happyhour' | 'datacenter' | 'office';
+
+export interface BossArena {
+  startX: number;
+  endX: number;
+  triggerX: number;
+  active: boolean;
+}
 
 export interface Level {
   id: number;
@@ -109,6 +124,7 @@ export interface Level {
   goal: { x: number; y: number };
   hasBoss?: boolean;
   bossId?: string;
+  bossArena?: BossArena;
 }
 
 export type GameState = 'menu' | 'character-select' | 'level-select' | 'playing' | 'paused' | 'level-complete' | 'game-over' | 'boss-defeated';
@@ -117,5 +133,6 @@ export interface GameProgress {
   unlockedLevels: number[];
   completedLevels: number[];
   totalNetworking: number;
+  totalCoins: number;
   selectedCharacter: CharacterId | null;
 }

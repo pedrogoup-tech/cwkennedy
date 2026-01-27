@@ -30,13 +30,13 @@ const Game: React.FC = () => {
   const currentLevel = levels.find(l => l.id === currentLevelId);
   const networkingCollected = React.useRef(0);
 
-  const handleLevelComplete = (collected: number) => {
+  const handleLevelComplete = (collected: number, coins: number) => {
     networkingCollected.current = collected;
     completeLevel(currentLevelId, collected);
   };
 
   const handleNextLevel = () => {
-    if (currentLevelId < 6) {
+    if (currentLevelId < 7) {
       selectLevel(currentLevelId + 1);
     }
   };
@@ -91,7 +91,7 @@ const Game: React.FC = () => {
           levelName={currentLevel.name}
           networkingCollected={networkingCollected.current}
           networkingTotal={currentLevel.powerUps.filter(p => p.type === 'networking').length}
-          hasNextLevel={currentLevelId < 6}
+          hasNextLevel={currentLevelId < 7}
           onNextLevel={handleNextLevel}
           onReplay={restartLevel}
           onLevelSelect={goToLevelSelect}

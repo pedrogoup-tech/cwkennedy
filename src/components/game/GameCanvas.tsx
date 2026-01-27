@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Level, Player, Enemy, PowerUp, Projectile, CharacterId, BackgroundType } from '@/types/game';
+import { Level, Player, Enemy, PowerUp, Projectile, CharacterId, BackgroundType, BossArena } from '@/types/game';
 import { characters } from '@/data/characters';
 import { updateEnemyAI, EnemyProjectile } from './EnemyAI';
 import GameHUD from './GameHUD';
@@ -16,7 +16,7 @@ import networkingSprite from '@/assets/sprites/networking.png';
 interface GameCanvasProps {
   level: Level;
   characterId: CharacterId;
-  onLevelComplete: (networkingCollected: number) => void;
+  onLevelComplete: (networkingCollected: number, coinsCollected: number) => void;
   onGameOver: () => void;
   onPause: () => void;
   onBossDefeated?: () => void;
@@ -25,6 +25,7 @@ interface GameCanvasProps {
 // Shoot timer for muzzle flash
 interface ShootState {
   shootTimer: number;
+  shootCooldown: number;
 }
 
 // Collect effect for power-ups
@@ -32,7 +33,7 @@ interface CollectEffect {
   id: string;
   x: number;
   y: number;
-  type: 'coffee' | 'wifi' | 'networking';
+  type: 'coffee' | 'wifi' | 'networking' | 'coin';
   timer: number;
   particles: Array<{ x: number; y: number; vx: number; vy: number; size: number; alpha: number }>;
 }
@@ -44,22 +45,28 @@ const COFFEE_SPEED_BOOST = 2;
 const COFFEE_JUMP_BOOST = -3;
 const COFFEE_DURATION = 300;
 const PROJECTILE_SPEED = 12;
+const PROGRAMMER_SHOOT_COOLDOWN = 180; // 3 segundos a 60fps
+const NORMAL_SHOOT_COOLDOWN = 60; // 1 segundo a 60fps
 
 // Character-specific modifiers
 const getCharacterModifiers = (characterId: CharacterId) => {
   switch (characterId) {
     case 'entrepreneur':
-      return { canDoubleJump: true, gravityMod: 1, speedMod: 1, collectRadius: 1, startsWithWifi: false };
+      return { canDoubleJump: true, gravityMod: 1, speedMod: 1, collectRadius: 1, startsWithWifi: false, isProgrammer: false, jumpBoost: 1 };
     case 'designer':
-      return { canDoubleJump: false, gravityMod: 0.65, speedMod: 1, collectRadius: 1, startsWithWifi: false };
+      // Designer: gravidade muito reduzida + pulo mais alto
+      return { canDoubleJump: false, gravityMod: 0.5, speedMod: 1, collectRadius: 1, startsWithWifi: false, isProgrammer: false, jumpBoost: 1.15 };
     case 'programmer':
-      return { canDoubleJump: false, gravityMod: 1, speedMod: 1, collectRadius: 1, startsWithWifi: true };
+      // Programador: começa com wifi mas tiro lento (1 a cada 3s)
+      return { canDoubleJump: false, gravityMod: 1, speedMod: 1, collectRadius: 1, startsWithWifi: true, isProgrammer: true, jumpBoost: 1 };
     case 'socialmedia':
-      return { canDoubleJump: false, gravityMod: 1, speedMod: 1, collectRadius: 2, startsWithWifi: false };
+      // Social Media: raio de coleta MUITO maior (3x) + atrai itens
+      return { canDoubleJump: false, gravityMod: 1, speedMod: 1, collectRadius: 3, startsWithWifi: false, isProgrammer: false, jumpBoost: 1 };
     case 'gestor':
-      return { canDoubleJump: false, gravityMod: 1, speedMod: 1.25, collectRadius: 1, startsWithWifi: false };
+      // Gestor: velocidade muito maior (40%)
+      return { canDoubleJump: false, gravityMod: 1, speedMod: 1.4, collectRadius: 1, startsWithWifi: false, isProgrammer: false, jumpBoost: 1 };
     default:
-      return { canDoubleJump: false, gravityMod: 1, speedMod: 1, collectRadius: 1, startsWithWifi: false };
+      return { canDoubleJump: false, gravityMod: 1, speedMod: 1, collectRadius: 1, startsWithWifi: false, isProgrammer: false, jumpBoost: 1 };
   }
 };
 
@@ -108,12 +115,23 @@ const drawBackground = (
       bgGradient.addColorStop(0.6, '#8E44AD');
       bgGradient.addColorStop(1, '#D35400');
       break;
+    case 'datacenter':
+      bgGradient.addColorStop(0, '#0a0a0a');
+      bgGradient.addColorStop(0.3, '#1a1a2e');
+      bgGradient.addColorStop(0.7, '#16213e');
+      bgGradient.addColorStop(1, '#0f3460');
+      break;
+    case 'office':
+      bgGradient.addColorStop(0, '#E8E8E8');
+      bgGradient.addColorStop(0.5, '#D0D0D0');
+      bgGradient.addColorStop(1, '#B8B8B8');
+      break;
   }
   ctx.fillStyle = bgGradient;
   ctx.fillRect(0, 0, canvasWidth, canvasHeight);
   
   // Draw pixel art stars for night scenes
-  if (background === 'rooftop' || background === 'happyhour') {
+  if (background === 'rooftop' || background === 'happyhour' || background === 'datacenter') {
     ctx.fillStyle = '#FFFFFF';
     for (let i = 0; i < 60; i++) {
       const starX = ((i * 47 + cameraX * 0.05) % (canvasWidth + 100)) - 50;
@@ -121,7 +139,6 @@ const drawBackground = (
       const twinkle = Math.sin(gameTime * 0.1 + i) > 0.3;
       if (twinkle) {
         ctx.globalAlpha = 0.6 + Math.sin(gameTime * 0.05 + i * 0.5) * 0.4;
-        // Pixel art star
         ctx.fillRect(Math.floor(starX), Math.floor(starY), 2, 2);
         ctx.fillRect(Math.floor(starX) - 1, Math.floor(starY) + 1, 1, 1);
         ctx.fillRect(Math.floor(starX) + 2, Math.floor(starY) + 1, 1, 1);
@@ -138,7 +155,6 @@ const drawBackground = (
       
       ctx.fillStyle = background === 'sunset' ? 'rgba(255, 200, 150, 0.6)' : 'rgba(255, 255, 255, 0.9)';
       
-      // Pixel art cloud shape
       const cloudWidth = 60 + (i % 3) * 20;
       ctx.fillRect(Math.floor(cloudX), Math.floor(cloudY) + 8, cloudWidth, 16);
       ctx.fillRect(Math.floor(cloudX) + 8, Math.floor(cloudY), cloudWidth - 16, 8);
@@ -146,9 +162,27 @@ const drawBackground = (
     }
   }
   
+  // Datacenter specific - server racks in background
+  if (background === 'datacenter') {
+    ctx.fillStyle = '#1a1a2e';
+    for (let i = 0; i < 20; i++) {
+      const rackX = Math.floor((i * 100 - cameraX * 0.15) % (canvasWidth + 300)) - 100;
+      const rackH = 120 + (i % 3) * 40;
+      ctx.fillRect(rackX, canvasHeight - 80 - rackH, 40, rackH);
+      
+      // Blinking LEDs
+      for (let led = 0; led < 5; led++) {
+        const isOn = (gameTime + i * 10 + led * 7) % 30 < 15;
+        ctx.fillStyle = isOn ? '#00FF00' : '#003300';
+        ctx.fillRect(rackX + 5, canvasHeight - 70 - rackH + led * 20, 4, 4);
+        ctx.fillStyle = isOn ? '#FF0000' : '#330000';
+        ctx.fillRect(rackX + 12, canvasHeight - 70 - rackH + led * 20, 4, 4);
+      }
+    }
+  }
+  
   // Draw pixel art buildings with parallax layers
   if (background === 'urban' || background === 'sunset' || background === 'rooftop') {
-    // Far layer (darkest)
     const farColor = background === 'rooftop' ? '#1B263B' : background === 'sunset' ? '#4A3728' : '#64748B';
     ctx.fillStyle = farColor;
     for (let i = 0; i < 15; i++) {
@@ -157,7 +191,6 @@ const drawBackground = (
       ctx.fillRect(bx, canvasHeight - 80 - bh, 50, bh);
     }
     
-    // Mid layer
     const midColor = background === 'rooftop' ? '#415A77' : background === 'sunset' ? '#5D4037' : '#475569';
     ctx.fillStyle = midColor;
     for (let i = 0; i < 12; i++) {
@@ -165,7 +198,6 @@ const drawBackground = (
       const bh = 80 + (i % 5) * 40;
       ctx.fillRect(bx, canvasHeight - 80 - bh, 70, bh);
       
-      // Pixel windows
       ctx.fillStyle = background === 'rooftop' ? '#FCD34D' : '#FEF3C7';
       for (let wy = 15; wy < bh - 20; wy += 20) {
         for (let wx = 10; wx < 60; wx += 18) {
@@ -177,7 +209,6 @@ const drawBackground = (
       ctx.fillStyle = midColor;
     }
     
-    // Near layer (closest)
     const nearColor = background === 'rooftop' ? '#778DA9' : background === 'sunset' ? '#6D4C41' : '#334155';
     ctx.fillStyle = nearColor;
     for (let i = 0; i < 8; i++) {
@@ -185,7 +216,6 @@ const drawBackground = (
       const bh = 100 + (i % 4) * 50;
       ctx.fillRect(bx, canvasHeight - 80 - bh, 90, bh);
       
-      // Detailed pixel windows with glow
       ctx.fillStyle = '#FBBF24';
       ctx.shadowColor = '#FCD34D';
       ctx.shadowBlur = 4;
@@ -202,8 +232,7 @@ const drawBackground = (
   }
   
   // Indoor scene decorations
-  if (background === 'coworking' || background === 'meeting') {
-    // Wall panels
+  if (background === 'coworking' || background === 'meeting' || background === 'office') {
     ctx.strokeStyle = '#D1D5DB';
     ctx.lineWidth = 2;
     for (let i = 0; i < canvasWidth; i += 80) {
@@ -214,18 +243,15 @@ const drawBackground = (
       ctx.stroke();
     }
     
-    // Pixel art plants
     const plantPositions = [100, 400, 700];
-    plantPositions.forEach((px, i) => {
+    plantPositions.forEach((px) => {
       const plantX = Math.floor((px - cameraX * 0.2) % (canvasWidth + 200));
       
-      // Pot
       ctx.fillStyle = '#A1887F';
       ctx.fillRect(plantX - 12, canvasHeight - 125, 24, 40);
       ctx.fillStyle = '#8D6E63';
       ctx.fillRect(plantX - 15, canvasHeight - 130, 30, 8);
       
-      // Leaves (pixel art style)
       ctx.fillStyle = '#4CAF50';
       ctx.fillRect(plantX - 20, canvasHeight - 160, 8, 30);
       ctx.fillRect(plantX + 12, canvasHeight - 155, 8, 25);
@@ -241,7 +267,6 @@ const drawBackground = (
     const discoX = canvasWidth / 2;
     const discoY = 60;
     
-    // Disco rays
     ctx.globalAlpha = 0.2;
     const colors = ['#FF1744', '#FFEA00', '#00E676', '#2979FF', '#D500F9', '#FF9100'];
     for (let i = 0; i < 8; i++) {
@@ -263,7 +288,6 @@ const drawBackground = (
     }
     ctx.globalAlpha = 1;
     
-    // Disco ball (pixel art)
     ctx.fillStyle = '#E0E0E0';
     ctx.fillRect(discoX - 15, discoY - 15, 30, 30);
     ctx.fillStyle = '#BDBDBD';
@@ -274,7 +298,6 @@ const drawBackground = (
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(discoX - 4, discoY - 4, 8, 8);
     
-    // String
     ctx.fillStyle = '#9E9E9E';
     ctx.fillRect(discoX - 1, 0, 2, discoY - 15);
   }
@@ -292,7 +315,6 @@ const drawPlatform = (
   
   switch (platform.type) {
     case 'ground':
-      // Pixel art grass ground
       ctx.fillStyle = '#4CAF50';
       ctx.fillRect(px, py, platform.width, 8);
       ctx.fillStyle = '#388E3C';
@@ -300,7 +322,6 @@ const drawPlatform = (
       ctx.fillStyle = '#8D6E63';
       ctx.fillRect(px, py + 16, platform.width, platform.height - 16);
       ctx.fillStyle = '#795548';
-      // Dirt texture
       for (let dx = 0; dx < platform.width; dx += 16) {
         for (let dy = 20; dy < platform.height; dy += 12) {
           if ((dx + dy) % 24 === 0) {
@@ -308,7 +329,6 @@ const drawPlatform = (
           }
         }
       }
-      // Grass tufts
       ctx.fillStyle = '#66BB6A';
       for (let gx = 8; gx < platform.width; gx += 20) {
         ctx.fillRect(px + gx, py - 4, 4, 6);
@@ -317,14 +337,12 @@ const drawPlatform = (
       break;
       
     case 'platform':
-      // Pixel art wooden platform
       ctx.fillStyle = '#A1887F';
       ctx.fillRect(px, py, platform.width, 4);
       ctx.fillStyle = '#8D6E63';
       ctx.fillRect(px, py + 4, platform.width, platform.height - 8);
       ctx.fillStyle = '#6D4C41';
       ctx.fillRect(px, py + platform.height - 4, platform.width, 4);
-      // Wood grain lines
       ctx.fillStyle = '#795548';
       for (let i = 0; i < platform.width; i += 24) {
         ctx.fillRect(px + i, py, 2, platform.height);
@@ -332,33 +350,27 @@ const drawPlatform = (
       break;
       
     case 'moving':
-      // Pixel art metallic moving platform
       ctx.fillStyle = '#90A4AE';
       ctx.fillRect(px, py, platform.width, platform.height);
       ctx.fillStyle = '#B0BEC5';
       ctx.fillRect(px, py, platform.width, 4);
       ctx.fillStyle = '#607D8B';
       ctx.fillRect(px, py + platform.height - 4, platform.width, 4);
-      // Glowing edge
       ctx.fillStyle = '#4FC3F7';
       ctx.fillRect(px, py + platform.height - 2, platform.width, 2);
-      // Direction arrows
       ctx.fillStyle = '#CFD8DC';
       ctx.fillRect(px + 8, py + platform.height / 2 - 2, 8, 4);
       ctx.fillRect(px + platform.width - 16, py + platform.height / 2 - 2, 8, 4);
       break;
       
     case 'desk':
-      // Pixel art office desk
       ctx.fillStyle = '#6D4C41';
       ctx.fillRect(px, py, platform.width, 8);
       ctx.fillStyle = '#5D4037';
       ctx.fillRect(px, py + 8, platform.width, platform.height - 8);
-      // Desk legs
       ctx.fillStyle = '#4E342E';
       ctx.fillRect(px + 8, py + platform.height, 12, 20);
       ctx.fillRect(px + platform.width - 20, py + platform.height, 12, 20);
-      // Computer monitor
       if (platform.width > 80) {
         ctx.fillStyle = '#37474F';
         ctx.fillRect(px + platform.width / 2 - 16, py - 28, 32, 24);
@@ -370,7 +382,6 @@ const drawPlatform = (
       break;
       
     case 'glass':
-      // Pixel art glass platform
       ctx.globalAlpha = 0.6;
       ctx.fillStyle = '#81D4FA';
       ctx.fillRect(px, py, platform.width, platform.height);
@@ -384,15 +395,12 @@ const drawPlatform = (
       break;
       
     case 'rooftop':
-      // Pixel art rooftop
       ctx.fillStyle = '#78909C';
       ctx.fillRect(px, py, platform.width, 6);
       ctx.fillStyle = '#546E7A';
       ctx.fillRect(px, py + 6, platform.width, platform.height - 6);
-      // Edge detail
       ctx.fillStyle = '#90A4AE';
       ctx.fillRect(px, py, platform.width, 3);
-      // AC units
       if (platform.width > 150) {
         for (let i = 0; i < Math.floor(platform.width / 120); i++) {
           const acX = px + 40 + i * 120;
@@ -406,24 +414,34 @@ const drawPlatform = (
       break;
       
     case 'building':
-      // Pixel art building
       ctx.fillStyle = '#455A64';
       ctx.fillRect(px, py, platform.width, platform.height);
       ctx.fillStyle = '#37474F';
       ctx.fillRect(px, py, 4, platform.height);
       ctx.fillRect(px + platform.width - 4, py, 4, platform.height);
-      // Windows
       ctx.fillStyle = '#FFF59D';
       for (let wy = 20; wy < platform.height - 80; wy += 35) {
         for (let wx = 20; wx < platform.width - 30; wx += 45) {
           ctx.fillRect(px + wx, py + wy, 25, 20);
         }
       }
-      // Door
       ctx.fillStyle = '#FF9800';
       ctx.fillRect(px + platform.width / 2 - 25, py + platform.height - 70, 50, 70);
       ctx.fillStyle = '#FFB74D';
       ctx.fillRect(px + platform.width / 2 - 20, py + platform.height - 65, 40, 60);
+      break;
+      
+    case 'arena-wall':
+      // Parede de arena - bloqueio visual
+      ctx.fillStyle = '#F44336';
+      ctx.fillRect(px, py, platform.width, platform.height);
+      ctx.fillStyle = '#D32F2F';
+      ctx.fillRect(px + 2, py, platform.width - 4, platform.height);
+      // Stripes de perigo
+      ctx.fillStyle = '#FFEB3B';
+      for (let stripe = 0; stripe < platform.height; stripe += 20) {
+        ctx.fillRect(px, py + stripe, platform.width, 10);
+      }
       break;
   }
 };
@@ -446,7 +464,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
   // Shoot state for muzzle flash
   const [shootState, setShootState] = useState<ShootState>({
     shootTimer: 0,
+    shootCooldown: 0,
   });
+
+  // Boss arena state
+  const [bossArena, setBossArena] = useState<BossArena | null>(level.bossArena || null);
 
   // Collect effects
   const [collectEffects, setCollectEffects] = useState<CollectEffect[]>([]);
@@ -524,6 +546,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     maxHealth: 3,
     invincible: false,
     invincibleTimer: 0,
+    coins: 0,
+    shootCooldown: 0,
+    isProgrammer: modifiers.isProgrammer,
   });
 
   const [enemies, setEnemies] = useState<Enemy[]>(() => 
@@ -562,6 +587,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
       maxHealth: 3,
       invincible: false,
       invincibleTimer: 0,
+      coins: 0,
+      shootCooldown: 0,
+      isProgrammer: modifiers.isProgrammer,
     });
     setEnemies(level.enemies.map(e => ({ ...e, alive: true })));
     setPowerUps(level.powerUps.map(p => ({ ...p, collected: false })));
@@ -571,8 +599,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     setGameTime(0);
     setBossDefeated(false);
     setCollectEffects([]);
-    setShootState({ shootTimer: 0 });
-  }, [level, modifiers.startsWithWifi, modifiers.canDoubleJump]);
+    setShootState({ shootTimer: 0, shootCooldown: 0 });
+    setBossArena(level.bossArena || null);
+  }, [level, modifiers.startsWithWifi, modifiers.canDoubleJump, modifiers.isProgrammer]);
 
   // Input handling
   useEffect(() => {
@@ -584,11 +613,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         onPause();
       }
       
-      // Jump logic with double jump
+      // Jump logic with double jump and character-specific boost
       if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
         setPlayer(prev => {
           if (prev.isGrounded) {
-            const jumpForce = prev.hasCoffee ? JUMP_FORCE + COFFEE_JUMP_BOOST : JUMP_FORCE;
+            let jumpForce = prev.hasCoffee ? JUMP_FORCE + COFFEE_JUMP_BOOST : JUMP_FORCE;
+            jumpForce *= modifiers.jumpBoost;
             return {
               ...prev,
               velocityY: jumpForce,
@@ -597,7 +627,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
               hasDoubleJumped: false,
             };
           } else if (prev.canDoubleJump && !prev.hasDoubleJumped) {
-            const jumpForce = prev.hasCoffee ? JUMP_FORCE + COFFEE_JUMP_BOOST : JUMP_FORCE;
+            let jumpForce = prev.hasCoffee ? JUMP_FORCE + COFFEE_JUMP_BOOST : JUMP_FORCE;
+            jumpForce *= modifiers.jumpBoost;
             return {
               ...prev,
               velocityY: jumpForce * 0.85,
@@ -608,10 +639,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         });
       }
       
-      // Shoot projectile
+      // Shoot projectile - with cooldown based on character
       if (e.code === 'KeyJ') {
         setPlayer(prev => {
-          if (prev.hasWifi) {
+          if (prev.hasWifi && (prev.shootCooldown || 0) <= 0) {
             setShootState(state => ({ ...state, shootTimer: 15 }));
             const newProjectile: Projectile = {
               id: `proj-${Date.now()}`,
@@ -622,6 +653,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
               type: 'wifi',
             };
             setProjectiles(projs => [...projs, newProjectile]);
+            
+            // Cooldown baseado no personagem
+            const cooldown = prev.isProgrammer ? PROGRAMMER_SHOOT_COOLDOWN : NORMAL_SHOOT_COOLDOWN;
+            return { ...prev, shootCooldown: cooldown };
           }
           return prev;
         });
@@ -639,7 +674,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [onPause]);
+  }, [onPause, modifiers.jumpBoost]);
 
   // Collision detection
   const checkCollision = useCallback((
@@ -650,9 +685,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
   }, []);
 
   // Create collect effect
-  const createCollectEffect = useCallback((x: number, y: number, type: 'coffee' | 'wifi' | 'networking') => {
+  const createCollectEffect = useCallback((x: number, y: number, type: 'coffee' | 'wifi' | 'networking' | 'coin') => {
     const particles = [];
-    const particleCount = 12;
+    const particleCount = type === 'coin' ? 8 : 12;
     for (let i = 0; i < particleCount; i++) {
       const angle = (i / particleCount) * Math.PI * 2;
       particles.push({
@@ -680,9 +715,16 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     const gameLoop = () => {
       setGameTime(prev => prev + 1);
 
-      // Update shoot timer
+      // Update shoot timer and cooldown
       setShootState(prev => ({
         shootTimer: Math.max(0, prev.shootTimer - 1),
+        shootCooldown: Math.max(0, prev.shootCooldown - 1),
+      }));
+
+      // Update player shoot cooldown
+      setPlayer(prev => ({
+        ...prev,
+        shootCooldown: Math.max(0, (prev.shootCooldown || 0) - 1),
       }));
 
       // Update collect effects
@@ -701,6 +743,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
           }))
           .filter(effect => effect.timer > 0);
       });
+
+      // Check boss arena trigger
+      if (bossArena && !bossArena.active && player.x > bossArena.triggerX) {
+        setBossArena({ ...bossArena, active: true });
+      }
 
       setPlayer(prevPlayer => {
         let newPlayer = { ...prevPlayer };
@@ -735,6 +782,18 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         newPlayer.x += newPlayer.velocityX;
         newPlayer.y += newPlayer.velocityY;
 
+        // Boss arena bounds
+        if (bossArena && bossArena.active) {
+          if (newPlayer.x < bossArena.startX) {
+            newPlayer.x = bossArena.startX;
+            newPlayer.velocityX = 0;
+          }
+          if (newPlayer.x + newPlayer.width > bossArena.endX) {
+            newPlayer.x = bossArena.endX - newPlayer.width;
+            newPlayer.velocityX = 0;
+          }
+        }
+
         // Bounds checking
         if (newPlayer.x < 0) newPlayer.x = 0;
         if (newPlayer.x > level.width - newPlayer.width) {
@@ -744,6 +803,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         // Platform collision
         newPlayer.isGrounded = false;
         level.platforms.forEach(platform => {
+          if (platform.type === 'arena-wall') {
+            // Skip arena walls if arena not active
+            if (!bossArena || !bossArena.active) return;
+            // Check if boss is defeated - remove walls
+            if (bossDefeated) return;
+          }
+          
           let platX = platform.x;
           
           if (platform.type === 'moving' && platform.movingRange && platform.movingSpeed) {
@@ -800,7 +866,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             newPlayer.x, newPlayer.y, newPlayer.width, newPlayer.height,
             level.goal.x, level.goal.y, 60, 100
           )) {
-            onLevelComplete(newPlayer.networkingCollected);
+            onLevelComplete(newPlayer.networkingCollected, newPlayer.coins);
           }
         }
 
@@ -849,7 +915,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                       if (onBossDefeated) onBossDefeated();
                       return { ...e, alive: false, health: 0 };
                     }
-                    return { ...e, health: newHealth };
+                    return { ...e, health: newHealth, retreatTimer: 30 };
                   }
                   return e;
                 }));
@@ -918,7 +984,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
           }
           
           // Remove if off screen
-          if (newProj.x < cameraX - 100 || newProj.x > cameraX + 900 || newProj.y > 600) {
+          if (newProj.x < cameraX - 100 || newProj.x > cameraX + 900 || newProj.y > 600 || newProj.y < -50) {
             return false;
           }
           
@@ -951,7 +1017,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                       if (onBossDefeated) onBossDefeated();
                       return { ...e, alive: false, health: 0 };
                     }
-                    return { ...e, health: newHealth };
+                    return { ...e, health: newHealth, retreatTimer: 30 };
                   }
                   return e;
                 }));
@@ -1000,6 +1066,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                   return { ...prev, hasWifi: true };
                 case 'networking':
                   return { ...prev, networkingCollected: prev.networkingCollected + 1 };
+                case 'coin':
+                  return { ...prev, coins: prev.coins + 1 };
                 default:
                   return prev;
               }
@@ -1028,7 +1096,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [level, enemies, player, projectiles, bossProjectiles, cameraX, gameTime, checkCollision, onGameOver, onLevelComplete, onBossDefeated, modifiers, bossDefeated, createCollectEffect, shootState]);
+  }, [level, enemies, player, projectiles, bossProjectiles, cameraX, gameTime, checkCollision, onGameOver, onLevelComplete, onBossDefeated, modifiers, bossDefeated, createCollectEffect, bossArena]);
 
   // Render
   useEffect(() => {
@@ -1051,6 +1119,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
 
     // Draw platforms with enhanced graphics
     level.platforms.forEach(platform => {
+      if (platform.type === 'arena-wall') {
+        if (!bossArena || !bossArena.active) return;
+        if (bossDefeated) return;
+      }
+      
       let platX = platform.x;
       
       if (platform.type === 'moving' && platform.movingRange && platform.movingSpeed) {
@@ -1107,34 +1180,56 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
       if (powerUp.collected) return;
 
       const bounceY = Math.sin(gameTime * 0.1 + powerUp.x * 0.01) * 4;
-      const size = 36;
+      const size = powerUp.type === 'coin' ? 28 : 36;
       const px = Math.floor(powerUp.x);
       const py = Math.floor(powerUp.y + bounceY);
       
-      // Glow effect
-      const glowColor = powerUp.type === 'coffee' ? 'rgba(255, 152, 0, 0.4)' : 
-                       powerUp.type === 'wifi' ? 'rgba(33, 150, 243, 0.4)' : 'rgba(76, 175, 80, 0.4)';
-      ctx.fillStyle = glowColor;
-      ctx.beginPath();
-      ctx.arc(px + size / 2, py + size / 2, size / 2 + 8, 0, Math.PI * 2);
-      ctx.fill();
-      
-      let sprite: HTMLImageElement | null = null;
-      switch (powerUp.type) {
-        case 'coffee': sprite = images.coffee; break;
-        case 'wifi': sprite = images.wifi; break;
-        case 'networking': sprite = images.networking; break;
-      }
+      if (powerUp.type === 'coin') {
+        // Pixel art coin
+        const rotation = Math.sin(gameTime * 0.15 + powerUp.x * 0.01);
+        const coinWidth = Math.abs(rotation) * 20 + 8;
+        
+        ctx.fillStyle = '#FFD700';
+        ctx.fillRect(px + (28 - coinWidth) / 2, py, coinWidth, 28);
+        ctx.fillStyle = '#FFA000';
+        ctx.fillRect(px + (28 - coinWidth) / 2 + 2, py + 2, coinWidth - 4, 24);
+        ctx.fillStyle = '#FFEB3B';
+        ctx.fillRect(px + (28 - coinWidth) / 2 + 4, py + 4, 6, 6);
+        
+        // Glow
+        ctx.globalAlpha = 0.4;
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.arc(px + 14, py + 14, 18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      } else {
+        // Glow effect
+        const glowColor = powerUp.type === 'coffee' ? 'rgba(255, 152, 0, 0.4)' : 
+                         powerUp.type === 'wifi' ? 'rgba(33, 150, 243, 0.4)' : 'rgba(76, 175, 80, 0.4)';
+        ctx.fillStyle = glowColor;
+        ctx.beginPath();
+        ctx.arc(px + size / 2, py + size / 2, size / 2 + 8, 0, Math.PI * 2);
+        ctx.fill();
+        
+        let sprite: HTMLImageElement | null = null;
+        switch (powerUp.type) {
+          case 'coffee': sprite = images.coffee; break;
+          case 'wifi': sprite = images.wifi; break;
+          case 'networking': sprite = images.networking; break;
+        }
 
-      if (sprite) {
-        ctx.drawImage(sprite, px, py, size, size);
+        if (sprite) {
+          ctx.drawImage(sprite, px, py, size, size);
+        }
       }
     });
 
     // Draw collect effects
     collectEffects.forEach(effect => {
       const effectColor = effect.type === 'coffee' ? '#FF9800' : 
-                         effect.type === 'wifi' ? '#2196F3' : '#4CAF50';
+                         effect.type === 'wifi' ? '#2196F3' : 
+                         effect.type === 'coin' ? '#FFD700' : '#4CAF50';
       
       effect.particles.forEach(p => {
         if (p.alpha > 0) {
@@ -1163,7 +1258,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
       ctx.fillStyle = '#FFFFFF';
       ctx.font = 'bold 14px "Press Start 2P", monospace';
       ctx.textAlign = 'center';
-      const text = effect.type === 'coffee' ? '+SPEED!' : effect.type === 'wifi' ? '+WIFI!' : '+1';
+      const text = effect.type === 'coffee' ? '+SPEED!' : 
+                   effect.type === 'wifi' ? '+WIFI!' : 
+                   effect.type === 'coin' ? '+1' : '+1';
       ctx.fillText(text, effect.x, effect.y - 20 - (30 - effect.timer) * 1.5);
       ctx.textAlign = 'left';
       
@@ -1202,10 +1299,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         // Boss health bar
         if (enemy.health !== undefined && enemy.maxHealth !== undefined) {
           const healthPercent = enemy.health / enemy.maxHealth;
-          const barWidth = 100;
-          const barHeight = 10;
+          const barWidth = 120;
+          const barHeight = 14;
           const barX = ex + (enemy.width - barWidth) / 2;
-          const barY = ey - 30;
+          const barY = ey - 40;
           
           // Background
           ctx.fillStyle = '#1a1a1a';
@@ -1227,7 +1324,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
           ctx.fillStyle = '#FFFFFF';
           ctx.font = 'bold 10px "Press Start 2P", monospace';
           ctx.textAlign = 'center';
-          ctx.fillText('MICROMANAGER', ex + enemy.width / 2, barY - 8);
+          ctx.fillText(enemy.bossName || 'BOSS', ex + enemy.width / 2, barY - 8);
           ctx.textAlign = 'left';
         }
       } else {
@@ -1360,44 +1457,64 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
 
     ctx.restore();
     
-    // Draw player health bar (fixed position) - pixel art style
+    // ============ HUD - VIDA E MOEDAS (MAIOR) ============
+    
+    // Background for HUD
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(canvas.width - 200, 10, 190, 80);
+    ctx.strokeStyle = '#FFD700';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(canvas.width - 200, 10, 190, 80);
+    
+    // Draw player health bar - BIGGER hearts
     if (player.health !== undefined && player.maxHealth !== undefined) {
       const hearts = player.maxHealth;
-      const heartSize = 20;
-      const startX = canvas.width - hearts * (heartSize + 6) - 15;
-      const heartY = 15;
+      const heartSize = 28;
+      const startX = canvas.width - 190;
+      const heartY = 20;
       
       for (let i = 0; i < hearts; i++) {
-        const heartX = startX + i * (heartSize + 6);
+        const heartX = startX + i * (heartSize + 8);
         
-        // Pixel art heart shape
+        // Pixel art heart shape - BIGGER
         if (i < player.health) {
           // Full heart
           ctx.fillStyle = '#F44336';
-          // Heart shape made of rectangles
-          ctx.fillRect(heartX + 2, heartY, 6, 6);
-          ctx.fillRect(heartX + 12, heartY, 6, 6);
-          ctx.fillRect(heartX, heartY + 4, 20, 8);
-          ctx.fillRect(heartX + 2, heartY + 12, 16, 4);
-          ctx.fillRect(heartX + 4, heartY + 16, 12, 2);
-          ctx.fillRect(heartX + 8, heartY + 18, 4, 2);
+          ctx.fillRect(heartX + 3, heartY, 8, 8);
+          ctx.fillRect(heartX + 17, heartY, 8, 8);
+          ctx.fillRect(heartX, heartY + 5, 28, 10);
+          ctx.fillRect(heartX + 3, heartY + 15, 22, 5);
+          ctx.fillRect(heartX + 6, heartY + 20, 16, 4);
+          ctx.fillRect(heartX + 10, heartY + 24, 8, 3);
           // Highlight
           ctx.fillStyle = '#EF9A9A';
-          ctx.fillRect(heartX + 4, heartY + 2, 4, 4);
+          ctx.fillRect(heartX + 5, heartY + 3, 6, 5);
         } else {
           // Empty heart
           ctx.fillStyle = '#424242';
-          ctx.fillRect(heartX + 2, heartY, 6, 6);
-          ctx.fillRect(heartX + 12, heartY, 6, 6);
-          ctx.fillRect(heartX, heartY + 4, 20, 8);
-          ctx.fillRect(heartX + 2, heartY + 12, 16, 4);
-          ctx.fillRect(heartX + 4, heartY + 16, 12, 2);
-          ctx.fillRect(heartX + 8, heartY + 18, 4, 2);
+          ctx.fillRect(heartX + 3, heartY, 8, 8);
+          ctx.fillRect(heartX + 17, heartY, 8, 8);
+          ctx.fillRect(heartX, heartY + 5, 28, 10);
+          ctx.fillRect(heartX + 3, heartY + 15, 22, 5);
+          ctx.fillRect(heartX + 6, heartY + 20, 16, 4);
+          ctx.fillRect(heartX + 10, heartY + 24, 8, 3);
         }
       }
     }
     
-  }, [player, enemies, powerUps, projectiles, bossProjectiles, level, cameraX, gameTime, images, bossDefeated, shootState, collectEffects]);
+    // Draw coins counter - BIGGER
+    ctx.fillStyle = '#FFD700';
+    ctx.fillRect(canvas.width - 190, 55, 20, 24);
+    ctx.fillStyle = '#FFA000';
+    ctx.fillRect(canvas.width - 188, 57, 16, 20);
+    ctx.fillStyle = '#FFEB3B';
+    ctx.fillRect(canvas.width - 186, 59, 6, 6);
+    
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 18px "Press Start 2P", monospace';
+    ctx.fillText(`× ${player.coins}`, canvas.width - 160, 73);
+    
+  }, [player, enemies, powerUps, projectiles, bossProjectiles, level, cameraX, gameTime, images, bossDefeated, shootState, collectEffects, bossArena]);
 
   const networkingTotal = level.powerUps.filter(p => p.type === 'networking').length;
 

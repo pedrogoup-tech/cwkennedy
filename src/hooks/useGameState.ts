@@ -6,6 +6,7 @@ const initialProgress: GameProgress = {
   unlockedLevels: [1],
   completedLevels: [],
   totalNetworking: 0,
+  totalCoins: 0,
   selectedCharacter: null,
 };
 
@@ -39,8 +40,8 @@ export const useGameState = () => {
         : [...prev.completedLevels, levelId];
       
       const nextLevelId = levelId + 1;
-      // Agora temos 6 fases jogáveis
-      const newUnlocked = nextLevelId <= 6 && !prev.unlockedLevels.includes(nextLevelId)
+      // Agora temos 7 fases jogáveis
+      const newUnlocked = nextLevelId <= 7 && !prev.unlockedLevels.includes(nextLevelId)
         ? [...prev.unlockedLevels, nextLevelId]
         : prev.unlockedLevels;
 
@@ -55,7 +56,7 @@ export const useGameState = () => {
     setLevels(prev => prev.map(level => 
       level.id === levelId 
         ? { ...level, completed: true }
-        : level.id === levelId + 1 && levelId < 6
+        : level.id === levelId + 1 && levelId < 7
           ? { ...level, unlocked: true }
           : level
     ));
